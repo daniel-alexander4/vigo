@@ -4,12 +4,16 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var authCmd = &cobra.Command{
@@ -18,13 +22,26 @@ var authCmd = &cobra.Command{
 }
 
 var authSetTokenCmd = &cobra.Command{
-	Use:   "set-token <token>",
-	Short: "Save an vgot_ API token to ~/.config/vigo/token for subsequent CLI requests",
-	Args:  cobra.ExactArgs(1),
+	Use:   "set-token [token]",
+	Short: "Save a vgot_ API token to ~/.config/vigo/token for subsequent CLI requests",
+	Long: `Save a vgot_ API token for subsequent CLI requests.
+
+With no argument the token is read without echo from the terminal, or from
+the first line of stdin when stdin is a pipe. Prefer either over passing it as
+an argument, which leaves it in shell history and the process list.`,
+	Example: `  vigocli auth set-token
+  vigocli auth set-token < token.txt`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		token := strings.TrimSpace(args[0])
-		if token == "" {
-			return fmt.Errorf("token cannot be empty")
+		stdinFD := int(os.Stdin.Fd())
+		token, err := readTokenInput(args, os.Stdin, term.IsTerminal(stdinFD), func() ([]byte, error) {
+			fmt.Fprint(os.Stderr, "API token: ")
+			b, err := term.ReadPassword(stdinFD)
+			fmt.Fprintln(os.Stderr)
+			return b, err
+		})
+		if err != nil {
+			return err
 		}
 		if err := saveAuthToken(token); err != nil {
 			return fmt.Errorf("saving token: %w", err)
@@ -34,13 +51,40 @@ var authSetTokenCmd = &cobra.Command{
 	},
 }
 
+// readTokenInput resolves the token for set-token: the argument when given,
+// else a no-echo prompt on a terminal, else the first line of stdin.
+func readTokenInput(args []string, stdin io.Reader, isTTY bool, prompt func() ([]byte, error)) (string, error) {
+	var raw string
+	switch {
+	case len(args) == 1:
+		raw = args[0]
+	case isTTY:
+		b, err := prompt()
+		if err != nil {
+			return "", fmt.Errorf("reading token: %w", err)
+		}
+		raw = string(b)
+	default:
+		line, err := bufio.NewReader(stdin).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return "", fmt.Errorf("reading token from stdin: %w", err)
+		}
+		raw = line
+	}
+	token := strings.TrimSpace(raw)
+	if token == "" {
+		return "", fmt.Errorf("token cannot be empty")
+	}
+	return token, nil
+}
+
 var authStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show whether a token is configured and which server it targets",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token := loadAuthToken()
 		if token == "" {
-			fmt.Println("Not authenticated. Run 'vigocli auth set-token <token>' to configure.")
+			fmt.Println("Not authenticated. Run 'vigocli auth set-token' to configure.")
 		} else {
 			// Show a masked version of the token.
 			masked := token[:8] + "..." + token[len(token)-4:]

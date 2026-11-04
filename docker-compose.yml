@@ -31,12 +31,16 @@ services:
     image: postgres:17-alpine
     container_name: vigo-postgres
     profiles: ["postgres"]
+    # Host-networked and listening on loopback only: vigo is host-networked, so
+    # it reaches Postgres at 127.0.0.1:5432 and nothing off-host can. The
+    # password comes from VIGO_POSTGRES_PASSWORD in /srv/vigo/.env; with it unset
+    # the Postgres image refuses to initialise rather than start with a default.
+    network_mode: host
+    command: ["postgres", "-c", "listen_addresses=127.0.0.1"]
     environment:
       POSTGRES_DB: vigo
       POSTGRES_USER: vigo
-      POSTGRES_PASSWORD: vigo
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${VIGO_POSTGRES_PASSWORD:-}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -50,8 +54,10 @@ services:
     container_name: vigo-ollama
     restart: unless-stopped
     profiles: ["ollama"]
-    ports:
-      - "11434:11434"
+    # Host-networked and bound to loopback: the host-networked vigo server
+    # reaches it at http://127.0.0.1:11434, and the unauthenticated Ollama API
+    # is not exposed off-host. (The image's default OLLAMA_HOST is 0.0.0.0.)
+    network_mode: host
     volumes:
       - ollama-data:/root/.ollama
     healthcheck:
@@ -60,6 +66,7 @@ services:
       timeout: 5s
       retries: 10
     environment:
+      - OLLAMA_HOST=127.0.0.1:11434
       - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_NUM_PARALLEL=1
       - OLLAMA_MAX_LOADED_MODELS=1
@@ -78,7 +85,10 @@ services:
     image: guacamole/guacd:1.5.5
     container_name: vigo-guacd
     restart: unless-stopped
-    command: ["-b", "0.0.0.0", "-L", "debug", "-f"]
+    # Loopback only: guacd has no authentication, and on 0.0.0.0 it would be an
+    # open RDP/VNC/SSH relay. `-L debug` is dev-only verbosity (this file is the
+    # source-build compose); docker-compose.prod.yml runs at the default level.
+    command: ["-b", "127.0.0.1", "-L", "debug", "-f"]
     # Host-networked so the host-networked vigo server reaches it at 127.0.0.1:4822
     # (no bridge DNS). Mirrors docker-compose.prod.yml.
     network_mode: host

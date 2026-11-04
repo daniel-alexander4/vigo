@@ -40,6 +40,10 @@ if [ ! -f "$ENV_FILE" ]; then
 # COMPOSE_PROFILES=ollama              # local Ollama AI (free, CPU-only, ~4GB RAM)
 # COMPOSE_PROFILES=postgres            # Postgres instead of SQLite
 # COMPOSE_PROFILES=ollama,postgres     # both
+#
+# Required with the postgres profile (the container will not initialise
+# without it). Use a long random value.
+# VIGO_POSTGRES_PASSWORD=
 ENVEOF
     echo "Default .env created."
 fi

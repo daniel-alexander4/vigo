@@ -128,7 +128,10 @@ func run(m *testing.M) (code int) {
 		fmt.Fprintln(os.Stderr, "write token:", err)
 		return 1
 	}
-	cliEnv = append(os.Environ(), "VIGO_CONFIG_DIR="+cfgDir)
+	// vigocli pins the server CA for a loopback --server; point it at the temp
+	// instance's CA rather than the host's /srv/vigo/tls/ca.
+	cliEnv = append(os.Environ(), "VIGO_CONFIG_DIR="+cfgDir,
+		"VIGO_CA_FILE="+filepath.Join(tmp, "tls", "ca"))
 
 	// Enroll a small synthetic fleet. --server-root anchors fakefleet's whole
 	// flow on tmp: it writes the config tree under tmp/stacks and publishes it

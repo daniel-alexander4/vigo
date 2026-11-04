@@ -27,10 +27,10 @@ Operators don't need to change anything in their configcrates: `secret:<path>` k
 |------------|-------------|
 | `init` | Bootstrap — generate the master key and prompt for the initial unlock passphrase |
 | `generate-certs` | Generate self-signed CA and server TLS certificates |
-| `unlock` | Open the vault for the current operator session (24h sliding TTL) |
+| `unlock` | Open the host-wide unlock window (24h sliding TTL) |
 | `lock` | Close the vault — gated verbs refuse until next unlock |
 | `rotate` | Replace the unlock passphrase — requires the current one |
-| `reset` | Break-glass: replace the passphrase by proving you can read `.master.key` |
+| `reset` | Break-glass: replace the passphrase by proving you hold `.master.key` |
 | `set raw <key>` | Store an arbitrary value verbatim (API keys, DSNs, certs) |
 | `set password <key>` | Store a human-typed credential with complexity validation |
 | `reveal <key>` | Decrypt and print a stored value |
@@ -70,7 +70,9 @@ Refuses to run only when both the master key AND the verifier already exist — 
 
 ## unlock
 
-Open the vault for the operator session. Prompts for the unlock passphrase; on match, writes a 24h-from-now expiry sentinel. Every successful gated call after this slides the expiry forward by another 24h.
+Open the unlock window. Prompts for the unlock passphrase; on match, writes a 24h-from-now expiry sentinel. Every successful gated call after this slides the expiry forward by another 24h.
+
+The window is host-wide, not per operator: one sentinel file at `/srv/vigo/.secrets-unlocked`, shared by every account that runs vigocli on the host. It holds a plain timestamp, so anyone who can write `/srv/vigo` can open it without the passphrase. Treat it as the advisory gate described at the top of this page.
 
 ```bash
 vigocli secrets unlock
@@ -99,7 +101,7 @@ vigocli secrets rotate
 
 ## reset
 
-Break-glass: replace the unlock passphrase without knowing the current one. Requires read access to the master-key file — the same access level needed to decrypt secrets directly. Typed `RESET` confirmation prevents accidents.
+Break-glass: replace the unlock passphrase without knowing the current one. Requires the master-key file (`--key-file`, default `<secrets-dir>/.master.key`) — the same access level needed to decrypt secrets directly. The file must be a well-formed key (64 hex characters or 32 raw bytes), and if the vault holds any secret, at least one must decrypt under it; any other file is refused. Typed `RESET` confirmation prevents accidents.
 
 ```bash
 vigocli secrets reset

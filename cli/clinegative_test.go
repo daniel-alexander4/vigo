@@ -58,7 +58,7 @@ func TestCLINegativeArgs(t *testing.T) {
 		{"unknown flag", []string{"envoys", "list", "--definitely-not-a-flag"}, "unknown flag"},
 		{"missing required arg (runs show)", []string{"runs", "show"}, "accepts 1 arg"},
 		{"too many args (runs show)", []string{"runs", "show", "a", "b"}, "accepts 1 arg"},
-		{"missing required arg (auth set-token)", []string{"auth", "set-token"}, "accepts 1 arg"},
+		{"too many args (auth set-token)", []string{"auth", "set-token", "a", "b"}, "accepts at most 1 arg"},
 		{"missing required arg (security cve)", []string{"security", "cve"}, "accepts 1 arg"},
 	}
 	for _, c := range cases {

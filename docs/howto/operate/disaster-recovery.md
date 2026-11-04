@@ -137,8 +137,8 @@ vigocli backup restore /path/to/backup.tar.gz --db-only
 
 # 2. A new master key will be auto-generated on next start.
 #    Re-create all secrets:
-vigocli secrets set vigo/db/dsn
-vigocli secrets set vigo/smtp/password
+vigocli secrets set raw vigo/db/dsn
+vigocli secrets set raw vigo/smtp/password
 # ... repeat for each secret referenced in your config
 
 # 3. Publish and start

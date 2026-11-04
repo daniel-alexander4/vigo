@@ -6,13 +6,88 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
+
+// defaultServerCAFile is the server CA the REST listener's certificate chains
+// to (server/secrets/gencerts.go writes it next to the server cert).
+const defaultServerCAFile = "/srv/vigo/tls/ca"
+
+// caFileFlag and insecureTLS back the global --ca-file / --insecure flags.
+var (
+	caFileFlag  string
+	insecureTLS bool
+)
+
+// resolvedCAFile returns the CA bundle path and whether the operator named it
+// explicitly (--ca-file, then $VIGO_CA_FILE) rather than taking the default.
+func resolvedCAFile() (string, bool) {
+	if caFileFlag != "" {
+		return caFileFlag, true
+	}
+	if env := os.Getenv("VIGO_CA_FILE"); env != "" {
+		return env, true
+	}
+	return defaultServerCAFile, false
+}
+
+// cliTLSConfig is the one TLS trust decision every vigocli HTTPS call makes.
+//
+//   - --insecure: no verification (the operator asked for it by name).
+//   - plain http: no TLS at all.
+//   - a loopback URL: verify against the server CA (--ca-file, $VIGO_CA_FILE,
+//     else /srv/vigo/tls/ca). An unreadable CA is an error, never a silent
+//     downgrade: 8443 is an unprivileged port, so without verification any
+//     local user who binds it while vigosrv is down collects the bearer token.
+//   - any other URL: the system roots, or the named CA if one was given.
+func cliTLSConfig(baseURL string) (*tls.Config, error) {
+	if insecureTLS {
+		return &tls.Config{InsecureSkipVerify: true}, nil //nolint:gosec // explicit --insecure
+	}
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Scheme != "https" {
+		return nil, nil
+	}
+	path, explicit := resolvedCAFile()
+	if !explicit && !isLocalhost(baseURL) {
+		return nil, nil
+	}
+	pemBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the server CA %s to verify %s (%v) — pass --ca-file <path>, or --insecure to skip verification", path, baseURL, err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pemBytes) {
+		return nil, fmt.Errorf("server CA %s holds no PEM certificate — pass --ca-file <path>, or --insecure to skip verification", path)
+	}
+	return &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}, nil
+}
+
+// errTransport fails every request with the TLS-setup error, so a client built
+// without a usable trust anchor refuses to send anything (bearer token included).
+type errTransport struct{ err error }
+
+func (t errTransport) RoundTrip(*http.Request) (*http.Response, error) { return nil, t.err }
+
+// newCLIHTTPClient builds an http.Client for baseURL with cliTLSConfig applied.
+func newCLIHTTPClient(baseURL string, timeout time.Duration) *http.Client {
+	hc := &http.Client{Timeout: timeout}
+	cfg, err := cliTLSConfig(baseURL)
+	switch {
+	case err != nil:
+		hc.Transport = errTransport{err: err}
+	case cfg != nil:
+		hc.Transport = &http.Transport{TLSClientConfig: cfg}
+	}
+	return hc
+}
 
 type apiClient struct {
 	baseURL    string
@@ -30,15 +105,9 @@ func newAPIClient() *apiClient {
 // newAPIClient — the operator is expected to have run `vigocli
 // auth login --server <baseURL>` against the target host first.
 func newAPIClientFor(baseURL string) *apiClient {
-	hc := &http.Client{Timeout: 30 * time.Second}
-	if isLocalhost(baseURL) {
-		hc.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
 	c := &apiClient{
 		baseURL:    baseURL,
-		httpClient: hc,
+		httpClient: newCLIHTTPClient(baseURL, 30*time.Second),
 	}
 	c.authToken = loadAuthToken()
 	return c
@@ -66,7 +135,7 @@ func (c *apiClient) getRaw(path string) (*http.Response, error) {
 		return nil, fmt.Errorf("cannot reach server: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) // best-effort: the status code is the error; the body only adds detail
 		resp.Body.Close()
 		return nil, statusError(resp.StatusCode, body)
 	}

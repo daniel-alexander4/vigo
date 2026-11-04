@@ -364,8 +364,8 @@ var taskCancelCmd = &cobra.Command{
 	Short: "Cancel a stuck task or all running tasks",
 	Long: `Cancel a specific task by ID, or cancel all tasks stuck in running/pending state.
 
-  vigocli task cancel <id>       Cancel a specific task
-  vigocli task cancel --running  Cancel all running/pending tasks`,
+  vigocli task cancel <id>        # cancel a specific task
+  vigocli task cancel --running   # cancel all running/pending tasks`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cancelRunning, _ := cmd.Flags().GetBool("running")
 		client := newAPIClient()

@@ -3,19 +3,17 @@
 
 Manage CLI authentication tokens for the REST API.
 
-## Localhost Trust
+## On the server host
 
-When the CLI runs on the same host as the server (or the Docker host), all API requests are automatically trusted with admin privileges. No token is needed. This works like PostgreSQL's `peer` authentication — shell access to the server host implies full access.
-
-Trusted source addresses: `127.0.0.1`, `::1`, and Docker bridge networks (`172.16.0.0/12`).
+When the CLI runs on the server host it authenticates with the local-admin token the server mints on first boot at `/srv/vigo/cli-admin-token` (mode `0600`, root-owned), so `sudo vigocli ...` needs no setup. The source address grants nothing: a request without a valid token is refused wherever it comes from.
 
 ## Remote Access
 
 When pointing the CLI at a remote server (`--server http://remote:8443`), an API token is required:
 
 ```bash
-# Generate a token from the web UI admin panel or via local CLI
-vigocli auth set-token vgot_abc123...
+# Generate a token from the web UI admin panel or via local CLI, then:
+vigocli auth set-token        # prompts for the token without echo
 ```
 
 ## Subcommands
@@ -24,8 +22,11 @@ vigocli auth set-token vgot_abc123...
 
 Store an API token for CLI use. The token is saved to `~/.config/vigo/token` (mode 0600).
 
+With no argument it prompts for the token without echo, or reads the first line of stdin when stdin is a pipe. A token passed as an argument works too, but it lands in shell history and the process list.
+
 ```bash
-vigocli auth set-token vgot_abc123...
+vigocli auth set-token                 # prompt
+vigocli auth set-token < token.txt     # from a file or pipe
 ```
 
 ### status
@@ -59,7 +60,7 @@ Token created.
   Name:  ci-automation
   Token: vgot_abc123...
 Save this token — it will not be shown again.
-To use it: vigocli auth set-token vgot_abc123...
+To use it: vigocli auth set-token   (paste the token at the prompt)
 ```
 
 **Token ownership.** Normally the token belongs to the web user you are authenticated as. When you run `vigocli` **on the server host**, the CLI authenticates as the local-admin principal (the boot-minted root token), which is not a web user — so you must name the owner explicitly with `--user`:

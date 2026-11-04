@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:b44e2a2d746d2753eeef1efadc61683d226bc33b309f8e9473f51ddfc4e4f668 -->
+<!-- vigo-i18n source_sha:53b4fd05fe6db7e54e8da916c4b7e272ce04fdf837cc88d23df2872905cab23c -->
 
 # Installer le serveur Vigo
 
@@ -109,14 +109,16 @@ Si vous sautez cette étape, les fonctionnalités Swarm qui transitent par l'env
 
 ### Services optionnels
 
-Éditez `VIGO_SERVICES` dans `/srv/vigo/.env` pour activer des conteneurs optionnels :
+Éditez `COMPOSE_PROFILES` dans `/srv/vigo/.env` pour activer des conteneurs optionnels :
 
 ```bash
 # In .env, uncomment one of:
-VIGO_SERVICES=ollama              # local AI assistant (free, CPU-only)
-VIGO_SERVICES=postgres            # Postgres instead of SQLite
-VIGO_SERVICES=ollama,postgres     # both
+COMPOSE_PROFILES=ollama              # local AI assistant (free, CPU-only)
+COMPOSE_PROFILES=postgres            # Postgres instead of SQLite
+COMPOSE_PROFILES=ollama,postgres     # both
 ```
+
+Le profil `postgres` exige aussi `VIGO_POSTGRES_PASSWORD` dans le même fichier. Les deux conteneurs optionnels sont en réseau hôte et n'écoutent que sur `127.0.0.1` : le serveur joint Ollama à `http://127.0.0.1:11434` et Postgres à `127.0.0.1:5432`.
 
 ### Fuseau horaire
 

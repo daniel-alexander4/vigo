@@ -1,14 +1,15 @@
 # golangci-lint configuration.
 #
-# The repo's primary error-handling discipline is the TestNoIgnoredErrors
-# audit test (test/audit/audit_test.go), which scans server/ non-test code
-# for unjustified `_ =` discards of dangerous functions. errcheck here is
-# the complementary check for fully-unchecked calls.
+# errcheck (in v2's standard set) is the check for fully-unchecked calls — a
+# bare `os.Remove(p)` statement — across every package. The complementary
+# TestNoBlankDiscardedErrors audit test (test/audit/audit_test.go) scans
+# server/ and cli/ non-test code for unannotated `_ =` discards of dangerous
+# functions, which errcheck does not flag (check-blank is off).
 #
 # Exclusions mirror that discipline: the std-error-handling preset drops
 # the universally-best-effort calls (Close, Flush, Fprint*/print*,
 # os.Remove*), exclude-functions adds a few more in the same class, and
-# test files are exempt — as TestNoIgnoredErrors itself skips _test.go.
+# test files are exempt — as TestNoBlankDiscardedErrors itself skips _test.go.
 # Genuinely consequential unchecked calls are fixed in code, not here.
 version: "2"
 
@@ -26,7 +27,7 @@ linters:
       - std-error-handling
     rules:
       # Test files are exempt from errcheck — consistent with
-      # TestNoIgnoredErrors, which skips _test.go by design.
+      # TestNoBlankDiscardedErrors, which skips _test.go by design.
       - path: _test\.go
         linters:
           - errcheck

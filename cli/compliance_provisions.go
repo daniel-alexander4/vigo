@@ -31,10 +31,17 @@ listing the same controls across HIPAA / PCI / NIST / ISO / CIS — the
 cross-walk lives once, in this catalog.
 
 Examples:
-  vigocli compliance provisions                       List all known provisions.
-  vigocli compliance provisions --framework pci-dss   Filter to provisions that cover PCI controls.
-  vigocli compliance provisions --control 10.6.1      Find which provisions satisfy a specific control.
-  vigocli compliance provisions --show time-sync      Show the framework->controls map for one provision.
+  # List all known provisions.
+  vigocli compliance provisions
+
+  # Filter to provisions that cover PCI controls.
+  vigocli compliance provisions --framework pci-dss
+
+  # Find which provisions satisfy a specific control.
+  vigocli compliance provisions --control 10.6.1
+
+  # Show the framework-to-controls map for one provision.
+  vigocli compliance provisions --show time-sync
 `,
 	RunE: runComplianceProvisions,
 }

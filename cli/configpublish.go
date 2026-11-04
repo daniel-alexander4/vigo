@@ -6,7 +6,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -325,12 +324,7 @@ func askAI(question string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 
-	client := &http.Client{Timeout: 2 * time.Minute}
-	if isLocalhost(serverURL) {
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
+	client := newCLIHTTPClient(serverURL, 2*time.Minute)
 	resp, doErr := client.Do(req)
 	if doErr != nil {
 		fmt.Fprintf(os.Stderr, "(AI unavailable — server not running or AI not enabled)\n")

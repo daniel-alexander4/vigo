@@ -5,10 +5,10 @@
 #   :<VERSION>   immutable, for rollback + audit
 #   :latest      floating pointer — what `docker run ...:latest` picks up
 #
-# Customer install becomes a single command:
-#   docker run -d --name vigo -p 8443:8443 -p 1530:1530 \
-#     -v /srv/vigo:/srv/vigo \
-#     us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
+# Maintainer-only. The registry is private: images are not published for
+# anonymous pull, and operators build from source (see README.md
+# "Quickstart"). Pulling needs `gcloud auth configure-docker` against an
+# account with reader access on the repository.
 #
 # Override any of the environment defaults:
 #   PROJECT=other-project REGION=us-central1 ./push2AR.sh
@@ -18,9 +18,6 @@
 #   gcloud auth configure-docker us-west1-docker.pkg.dev
 #   gcloud artifacts repositories create vigo \
 #     --repository-format=docker --location=us-west1
-#   gcloud artifacts repositories add-iam-policy-binding vigo \
-#     --location=us-west1 --member=allUsers \
-#     --role=roles/artifactregistry.reader   # anonymous docker pull
 #
 # Flags:
 #   --allow-dirty   push even when the working tree has uncommitted

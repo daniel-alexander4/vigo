@@ -72,8 +72,8 @@ g() { gcloud --project="$PROJECT" "$@"; }
 # scp a file to a VM over IAP, retrying while the freshly-booted VM's IAP SSH
 # comes up (sshd + IAP tunnel can take ~30-60s after instance create).
 scp_iap() {
-  local src=$1 vm=$2 tries=0
-  until g compute scp "$src" "${vm}:/tmp/" --zone="$ZONE" --tunnel-through-iap --quiet 2>/dev/null; do
+  local src=$1 vm=$2 dest=${3:-/tmp/} tries=0
+  until g compute scp "$src" "${vm}:${dest}" --zone="$ZONE" --tunnel-through-iap --quiet 2>/dev/null; do
     tries=$((tries + 1))
     if [ "$tries" -ge 12 ]; then
       echo "  ! scp $(basename "$src") -> ${vm} failed after ${tries} tries (IAP SSH not ready?)" >&2
@@ -82,7 +82,24 @@ scp_iap() {
     echo "  ... ${vm} not ready for scp yet (try ${tries}); waiting 15s"
     sleep 15
   done
-  echo "  ok: $(basename "$src") -> ${vm}:/tmp/"
+  echo "  ok: $(basename "$src") -> ${vm}:${dest}"
+}
+
+# Create the private stage dir (~/vigo-stage, 0700) on a VM, retrying while IAP
+# SSH comes up. setup-server.sh runs as root and reads its inputs from here,
+# never from world-writable /tmp where another local user could plant them.
+stage_dir_iap() {
+  local vm=$1 tries=0
+  until g compute ssh "$vm" --zone="$ZONE" --tunnel-through-iap --quiet \
+      --command='install -d -m 0700 ~/vigo-stage' 2>/dev/null; do
+    tries=$((tries + 1))
+    if [ "$tries" -ge 12 ]; then
+      echo "  ! creating ~/vigo-stage on ${vm} failed after ${tries} tries (IAP SSH not ready?)" >&2
+      return 1
+    fi
+    echo "  ... ${vm} not ready for ssh yet (try ${tries}); waiting 15s"
+    sleep 15
+  done
 }
 
 ssh_iap() { g compute ssh "$1" --zone="$ZONE" --tunnel-through-iap --quiet --command="$2"; }
@@ -130,7 +147,12 @@ g artifacts docker images describe "${IMAGE}" >/dev/null 2>&1 || {
 echo "== Building harness binaries =="
 ( cd "$REPO_ROOT" && CGO_ENABLED=0 go build -o /tmp/vigo-fakefleet ./test/fakefleet )
 ( cd "$REPO_ROOT" && CGO_ENABLED=0 go build -o /tmp/vigocli        ./cli )
-echo "$VERSION" > /tmp/vigo-version
+# Local staging file for the version marker; scp keeps the basename, so the
+# server sees it as vigo-version.
+VERSION_DIR="$(mktemp -d)"
+trap 'rm -rf "$VERSION_DIR"' EXIT
+VERSION_FILE="${VERSION_DIR}/vigo-version"
+echo "$VERSION" > "$VERSION_FILE"
 
 echo "== Firewall (idempotent) =="
 g compute firewall-rules describe vigo-allow-internal >/dev/null 2>&1 || \
@@ -169,13 +191,14 @@ if [ "$SERVER_EXTERNAL_IP" -eq 1 ]; then
 fi
 
 echo "== Copying scripts + binaries to the VMs (via IAP) =="
-scp_iap "${SCRIPT_DIR}/setup-server.sh"     vigo-srv
-scp_iap "/tmp/vigo-version"                 vigo-srv
+stage_dir_iap vigo-srv
+scp_iap "${SCRIPT_DIR}/setup-server.sh"     vigo-srv vigo-stage/
+scp_iap "${VERSION_FILE}"                   vigo-srv vigo-stage/
 # Demo config tree (configcrates/roles/usercrates/hostcrates) for realistic
-# bundles — recursive copy to /tmp/demo-stacks on the server.
-g compute scp --recurse "${SCRIPT_DIR}/demo-stacks" vigo-srv:/tmp/ \
+# bundles — recursive copy to ~/vigo-stage/demo-stacks on the server.
+g compute scp --recurse "${SCRIPT_DIR}/demo-stacks" vigo-srv:vigo-stage/ \
   --zone="$ZONE" --tunnel-through-iap --quiet \
-  && echo "  ok: demo-stacks -> vigo-srv:/tmp/demo-stacks" \
+  && echo "  ok: demo-stacks -> vigo-srv:~/vigo-stage/demo-stacks" \
   || echo "  ! demo-stacks copy failed — server will fall back to empty bundles" >&2
 scp_iap "${SCRIPT_DIR}/setup-harness.sh" vigo-test-harness
 scp_iap "/tmp/vigo-fakefleet"            vigo-test-harness
@@ -188,7 +211,7 @@ EXT_IP=$(g compute instances describe vigo-srv --zone="$ZONE" \
 
 if [ "$RUN_SETUP" -eq 1 ]; then
   echo "== Provisioning vigo-srv (Docker + pull ${VERSION} + run vigosrv) =="
-  ssh_iap vigo-srv "sudo bash /tmp/setup-server.sh"
+  ssh_iap vigo-srv 'sudo bash ~/vigo-stage/setup-server.sh'
   echo "== Provisioning vigo-test-harness (binaries + OS tuning) =="
   ssh_iap vigo-test-harness "sudo bash /tmp/setup-harness.sh"
 fi

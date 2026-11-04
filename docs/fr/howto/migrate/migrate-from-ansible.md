@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:eaa5bc95032f25f2fbf5b97c61a0f366051ae1c29c46ba6058f6fee853774594 -->
+<!-- vigo-i18n source_sha:3440d686d3d20c83200ec17aead829f27ad126e43a0197f998f97edb8b1dd857 -->
 
 # Migration depuis Ansible
 
@@ -326,7 +326,7 @@ Les secrets sont résolus côté serveur lors de la compilation du bundle. La va
 
 6. **Pas de `--limit` ni de `--tags`.** Ansible peut cibler des sous-ensembles d'hôtes ou de tâches par exécution. Vigo applique toutes les ressources correspondantes à chaque check-in. Utilisez `when:` pour ignorer conditionnellement des ressources, et des motifs glob dans `envoys.vgo` pour le ciblage des hôtes.
 
-7. **Pas de commande `ansible` ad-hoc.** Pour des commandes ponctuelles sur le parc, utilisez `vigocli task run` ou `vigocli query run` — celles-ci passent par le flux de l'agent.
+7. **Pas de commande `ansible` ad-hoc.** Pour des commandes ponctuelles sur le parc, utilisez `vigocli task run` (ou `vigocli traits livequery` pour lire un trait) — celles-ci passent par le flux de l'agent.
 
 8. **L'agent doit d'abord être installé.** Ansible n'a besoin que de SSH. Vigo nécessite l'amorçage du binaire de l'agent sur chaque nœud. Utilisez `curl -sSfk https://<server>:8443/bootstrap | sudo sh` pour un enrôlement automatisé.
 

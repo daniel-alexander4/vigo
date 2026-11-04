@@ -32,7 +32,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -223,14 +222,9 @@ func runScrierSSH(ctx context.Context, envoyArg string, setupTimeout time.Durati
 		return fmt.Errorf("building ws url: %w", err)
 	}
 
-	// Reuse the REST client's TLS posture (InsecureSkipVerify on
-	// localhost, system pool elsewhere) so the same trust decisions
-	// apply to REST and WS.
-	wsHTTP := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: isLocalhost(serverURL)},
-		},
-	}
+	// Reuse the REST client's TLS trust decision (cliTLSConfig) so the
+	// same pinning applies to REST and WS.
+	wsHTTP := newCLIHTTPClient(serverURL, 0)
 	hdr := http.Header{}
 	if token := loadAuthToken(); token != "" {
 		hdr.Set("Authorization", "Bearer "+token)

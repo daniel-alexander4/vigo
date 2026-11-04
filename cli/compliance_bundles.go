@@ -33,10 +33,17 @@ functional capability that happens to satisfy controls across many
 frameworks uses "provides:" instead.
 
 Examples:
-  vigocli compliance bundles                                  List all known bundles.
-  vigocli compliance bundles --framework cis-ubuntu           Filter to bundles primarily for CIS Ubuntu.
-  vigocli compliance bundles --control 5.4.1.1                Find which bundles satisfy a specific control.
-  vigocli compliance bundles --show cis-ubuntu-access-baseline   Show the framework->controls map for one bundle.
+  # List all known bundles.
+  vigocli compliance bundles
+
+  # Filter to bundles primarily for CIS Ubuntu.
+  vigocli compliance bundles --framework cis-ubuntu
+
+  # Find which bundles satisfy a specific control.
+  vigocli compliance bundles --control 5.4.1.1
+
+  # Show the framework-to-controls map for one bundle.
+  vigocli compliance bundles --show cis-ubuntu-access-baseline
 `,
 	RunE: runComplianceBundles,
 }

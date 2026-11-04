@@ -19,7 +19,8 @@ server:
 
 # ── Database ──────────────────────────────────────────────────────────────
 # To use Postgres: set driver: postgres, and in .env set
-#   VIGO_SERVICES=postgres
+#   COMPOSE_PROFILES=postgres
+#   VIGO_POSTGRES_PASSWORD=<long random value>
 
 database:
   dsn: "secret:vigo/db/dsn"
@@ -86,8 +87,8 @@ watcher:
 #   method: none                               # none | oidc | isowebauth
 
 # ── SMTP Notifications ───────────────────────────────────────────────────
-# Requires an SMTP relay. Store password with:
-#   vigocli secrets set vigo/smtp/password "your-password"
+# Requires an SMTP relay. Store the password with (prompts for the value):
+#   vigocli secrets set raw vigo/smtp/password
 #
 # smtp:
 #   host: "smtp.example.com"
@@ -106,22 +107,22 @@ watcher:
 #   mode: standalone                           # standalone | spanner
 
 # ── AI Assistant ──────────────────────────────────────────────────────────
-# Also set VIGO_SERVICES=ollama in .env to start the Ollama container.
+# Also set COMPOSE_PROFILES=ollama in .env to start the Ollama container.
 # For Claude or OpenAI, store the API key with:
-#   vigocli secrets set vigo/ai/api_key "sk-..."
+#   vigocli secrets set raw vigo/ai/api_key
 #
 # ai:
 #   enabled: true
 #   provider: "ollama"                         # ollama | claude | openai | openai-compat
 #   model: "qwen2.5:7b"
 #   max_tokens: 4096
-#   base_url: "http://vigo-ollama:11434"     # Docker: use container name. Bare-metal: http://localhost:11434
+#   base_url: "http://127.0.0.1:11434"       # the compose Ollama container is host-networked on loopback
 #   # api_key: "secret:vigo/ai/api_key"     # for paid providers
 
 # ── Backup (Litestream — SQLite only) ────────────────────────────────────
 # Requires S3-compatible storage. Store credentials with:
-#   vigocli secrets set vigo/backup/aws_access_key "AKIA..."
-#   vigocli secrets set vigo/backup/aws_secret_key "..."
+#   vigocli secrets set raw vigo/backup/aws_access_key
+#   vigocli secrets set raw vigo/backup/aws_secret_key
 #
 # backup:
 #   url: "s3://my-bucket/vigo"

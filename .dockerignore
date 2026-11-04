@@ -14,6 +14,11 @@ dist/cli/
 # TLS certs (generated at runtime)
 certs/
 
+# Private keys. The agent signing key reaches the build only as a BuildKit
+# secret (--secret id=signing_key); `COPY . .` must never bake it into a layer.
+signing.key
+*.key
+
 # IDE
 .vscode/
 .idea/

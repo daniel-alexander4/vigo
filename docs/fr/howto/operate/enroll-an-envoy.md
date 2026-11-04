@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:ee5df72a9bf3a8c1039658fd777362696e4046c353651f0513857325457da2f9 -->
+<!-- vigo-i18n source_sha:65fc17562b6ed143d8d667e46e2be69eda543f5fa277696173d383d14c67f567 -->
 
 # Enrôler un Envoy
 
@@ -98,13 +98,14 @@ Les Envoys correspondant à la fois au glob de nom d'hôte et au CIDR source s'e
 Pour les environnements plus stricts, générez un token :
 
 ```bash
-vigocli tokens generate --pattern "web3.example.com"
+vigocli tokens generate
+vigocli approved add 'web3.example.com' --token <token>
 ```
 
 Transmettez le token au script de bootstrap :
 
 ```bash
-curl -sSfk https://<server>:8443/bootstrap | sudo sh -s -- --token <token>
+curl -sSfk "https://<server>:8443/bootstrap?token=<token>" | sudo sh
 ```
 
 Les tokens sont :

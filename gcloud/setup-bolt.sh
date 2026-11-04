@@ -28,14 +28,23 @@ CHECKIN_INTERVAL="${CHECKIN_INTERVAL:-30s}"
 echo "== Bolt image: ${IMAGE} · spanner_id=${SPANNER_ID} · patterns=${BOLT_PATTERNS} =="
 
 echo "== Docker (egress via Cloud NAT) =="
+# Distro docker.io (signed by the Ubuntu archive), not an unpinned remote script.
 if ! command -v docker >/dev/null; then
-  curl -fsSL https://get.docker.com | sh
+  apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io
   systemctl enable --now docker
 fi
 echo "== yq =="
+# Pinned release, verified against the SHA-256 in that release's checksums file.
+YQ_VERSION=v4.44.3
+YQ_SHA256=a2c097180dd884a8d50c956ee16a9cec070f30a7947cf4ebf87d5f36213e9ed7
 if ! command -v yq >/dev/null; then
-  curl -fsSL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-  chmod +x /usr/local/bin/yq
+  yq_tmp="$(mktemp)"
+  curl -fsSL -o "$yq_tmp" "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+  echo "${YQ_SHA256}  ${yq_tmp}" | sha256sum -c --quiet - \
+    || { echo "yq ${YQ_VERSION} checksum mismatch" >&2; rm -f "$yq_tmp"; exit 1; }
+  install -m 0755 "$yq_tmp" /usr/local/bin/yq
+  rm -f "$yq_tmp"
 fi
 
 echo "== Host FD ceiling =="

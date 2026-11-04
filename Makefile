@@ -41,7 +41,15 @@ SIGN_KEY ?= signing.key
 # this resolves to empty and build.rs falls back to the all-zero sentinel
 # pubkey; the resulting agent boots fine but refuses to self-update at
 # runtime with an operator-actionable error pointing back here.
-VIGO_AGENT_SIGNING_PUBKEY := $(shell test -f $(SIGN_KEY) && go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -pubkey-only 2>/dev/null)
+# A key that exists but cannot be read is an error, not the keyless case:
+# silently falling back to the sentinel would ship agents that refuse every
+# update. The derivation's own stderr stays visible for the diagnosis.
+VIGO_AGENT_SIGNING_PUBKEY := $(shell test -f $(SIGN_KEY) && go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -pubkey-only)
+ifneq ($(wildcard $(SIGN_KEY)),)
+ifeq ($(strip $(VIGO_AGENT_SIGNING_PUBKEY)),)
+$(error SIGN_KEY=$(SIGN_KEY) exists but deriving its public key failed (see the error above); fix or move the key, or point SIGN_KEY elsewhere)
+endif
+endif
 
 # Anti-tamper: bake the same pubkey into vigosrv so the startup
 # VerifyBinarySignature gate verifies the binary's detached .sig against THIS
@@ -126,7 +134,7 @@ dist-sign: dist-sign-agent
 	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
 	@for bin in dist/server/linux/amd64/vigosrv dist/cli/linux/amd64/vigocli; do \
 		if [ -f "$$bin" ]; then \
-			go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
+			go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig" || exit 1; \
 			echo "signed $$bin"; \
 		fi; \
 	done
@@ -135,8 +143,10 @@ dist-sign: dist-sign-agent
 # Usage: make dist-sign-agent SIGN_KEY=/path/to/signing.key
 dist-sign-agent:
 	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
+	@# `|| exit 1` inside the loop: otherwise the loop's status is the last
+	@# echo's, and a failed signature leaves a missing .sig behind a green make.
 	@find dist/agent -type f \( -name 'vigo' -o -name 'vigo.exe' \) 2>/dev/null | while read bin; do \
-		go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
+		go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig" || exit 1; \
 		echo "signed $$bin"; \
 	done
 
@@ -272,7 +282,7 @@ certs:
 	rm -f certs/server.csr certs/ca.srl
 	@echo "Certificates generated in certs/"
 
-# --- Docker Compose (reads VIGO_SERVICES from server .env) ---
+# --- Docker Compose (reads COMPOSE_PROFILES from server .env) ---
 
 ENVFILE ?= /srv/vigo/.env
 

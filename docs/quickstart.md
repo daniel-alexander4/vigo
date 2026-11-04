@@ -50,7 +50,7 @@ Then any *other* machine you want to manage — note this is a separate command 
 curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
-The `-k` is intentional. The Vigo server runs its own CA and presents a self-signed cert. Trust gets established on the *next* step: the bootstrap script downloads the agent, generates a per-host ED25519 keypair, and registers it with the server (token-free from loopback and private-LAN CIDRs by default; require a one-time token for anything outside the trusted-enrollment ranges — mint one with `vigocli tokens generate --pattern '*.example.com'` and pass it as `sudo sh -s -- --token <token>`). Every subsequent gRPC call between the agent and the server is mTLS-pinned against that pair — `-k` only relaxes the one-time bootstrap fetch, not the steady-state security.
+The `-k` is intentional. The Vigo server runs its own CA and presents a self-signed cert. Trust gets established on the *next* step: the bootstrap script downloads the agent, generates a per-host ED25519 keypair, and registers it with the server (token-free from loopback and private-LAN CIDRs by default; require a one-time token for anything outside the trusted-enrollment ranges — mint one with `vigocli tokens generate`, bind it with `vigocli approved add '*.example.com' --token <token>`, and fetch `/bootstrap?token=<token>`). Every subsequent gRPC call between the agent and the server is mTLS-pinned against that pair — `-k` only relaxes the one-time bootstrap fetch, not the steady-state security.
 
 The bootstrap script also installs the per-OS service (systemd / launchd / rc.d / rcctl / SMF / Windows Service).
 

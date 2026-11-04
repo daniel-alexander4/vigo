@@ -15,17 +15,18 @@ Standing up the server enrolled its own host over loopback ([tutorial 1](stand-u
 Decide which hostnames you'll let enroll, and mint a token scoped to them:
 
 ```bash
-vigocli tokens generate --pattern '*.example.com'
+vigocli tokens generate
+vigocli approved add '*.example.com' --token <token>
 ```
 
-This prints a one-time token (hashed at rest server-side; it can't be reused). The `--pattern` is an enrollment guard — only hostnames matching it can register.
+The first command prints a one-time token; the second binds it to a hostname glob (hashed at rest server-side; it can't be reused). Only hostnames matching the glob can register with it.
 
 ## 2. Run the installer on the new machine
 
 On the **new** host, fetch and run the bootstrap installer, passing the token:
 
 ```bash
-curl -sSfk https://<server-host>:8443/bootstrap | sudo sh -s -- --token <token>
+curl -sSfk "https://<server-host>:8443/bootstrap?token=<token>" | sudo sh
 ```
 
 The installer downloads the agent binary, generates a CSR, enrolls (the server signs it after checking the pattern + token), installs a native service (systemd / launchd / …), and starts it. The agent is installed at `/usr/local/sbin/vigo`.

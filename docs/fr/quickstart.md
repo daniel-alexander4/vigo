@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:a8617de5cf125787a4cb016c7e864074db1a8da160523df146fc3c98b3ea5115 -->
+<!-- vigo-i18n source_sha:420168e31704172ab80802444bba12c130d00322e6eef97a369bd37efbe480c5 -->
 
 # Démarrage rapide
 
@@ -52,7 +52,7 @@ Puis toute *autre* machine que vous souhaitez gérer — notez qu'il s'agit d'un
 curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
-Le `-k` est intentionnel. Le serveur Vigo exécute sa propre autorité de certification et présente un certificat auto-signé. La confiance s'établit à l'étape *suivante* : le script de bootstrap télécharge l'agent, génère une paire de clés ED25519 propre à l'hôte et l'enregistre auprès du serveur (sans jeton depuis le loopback et les CIDR de LAN privés par défaut ; exigez un jeton à usage unique pour tout ce qui se trouve en dehors des plages d'enrôlement de confiance — frappez-en un avec `vigocli tokens generate --pattern '*.example.com'` et passez-le via `sudo sh -s -- --token <token>`). Chaque appel gRPC ultérieur entre l'agent et le serveur est épinglé en mTLS contre cette paire — `-k` ne relâche que la récupération de bootstrap à usage unique, pas la sécurité en régime établi.
+Le `-k` est intentionnel. Le serveur Vigo exécute sa propre autorité de certification et présente un certificat auto-signé. La confiance s'établit à l'étape *suivante* : le script de bootstrap télécharge l'agent, génère une paire de clés ED25519 propre à l'hôte et l'enregistre auprès du serveur (sans jeton depuis le loopback et les CIDR de LAN privés par défaut ; exigez un jeton à usage unique pour tout ce qui se trouve en dehors des plages d'enrôlement de confiance — frappez-en un avec `vigocli tokens generate`, liez-le avec `vigocli approved add '*.example.com' --token <token>`, puis récupérez `/bootstrap?token=<token>`). Chaque appel gRPC ultérieur entre l'agent et le serveur est épinglé en mTLS contre cette paire — `-k` ne relâche que la récupération de bootstrap à usage unique, pas la sécurité en régime établi.
 
 Le script de bootstrap installe également le service propre à l'OS (systemd / launchd / rc.d / rcctl / SMF / Windows Service).
 

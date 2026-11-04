@@ -361,11 +361,11 @@ Via la CLI (nécessite une session active ou un jeton existant) :
 
 ```bash
 # Create a token (the plaintext is shown once):
-vigocli auth set-token $(curl -s -X POST \
+curl -s -X POST \
   -H "Authorization: Bearer $EXISTING_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "ci-deploy", "expires_in": "720h"}' \
-  https://vigo.example.com:8443/api/v1/auth/tokens | jq -r .token)
+  https://vigo.example.com:8443/api/v1/auth/tokens | jq -r .token | vigocli auth set-token
 ```
 
 Ou directement via l'API REST :
@@ -383,7 +383,7 @@ curl -X POST https://vigo.example.com:8443/api/v1/auth/tokens \
 Stockez un jeton pour l'usage CLI :
 
 ```bash
-vigocli auth set-token <token>
+vigocli auth set-token   # prompts for the token without echo
 vigocli auth status    # verify
 vigocli auth clear     # remove
 ```

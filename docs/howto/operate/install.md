@@ -108,14 +108,16 @@ If you skip this step, swarm features that route through the server envoy will s
 
 ### Optional services
 
-Edit `VIGO_SERVICES` in `/srv/vigo/.env` to enable optional containers:
+Edit `COMPOSE_PROFILES` in `/srv/vigo/.env` to enable optional containers:
 
 ```bash
 # In .env, uncomment one of:
-VIGO_SERVICES=ollama              # local AI assistant (free, CPU-only)
-VIGO_SERVICES=postgres            # Postgres instead of SQLite
-VIGO_SERVICES=ollama,postgres     # both
+COMPOSE_PROFILES=ollama              # local AI assistant (free, CPU-only)
+COMPOSE_PROFILES=postgres            # Postgres instead of SQLite
+COMPOSE_PROFILES=ollama,postgres     # both
 ```
+
+The `postgres` profile also needs `VIGO_POSTGRES_PASSWORD` set in the same file. Both optional containers are host-networked and listen on `127.0.0.1` only, so the server reaches Ollama at `http://127.0.0.1:11434` and Postgres at `127.0.0.1:5432`.
 
 ### Timezone
 

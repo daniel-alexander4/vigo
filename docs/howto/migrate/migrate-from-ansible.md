@@ -325,7 +325,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 6. **No `--limit` or `--tags`.** Ansible can target subsets of hosts or tasks per run. Vigo applies all matching resources every check-in. Use `when:` to conditionally skip resources, and glob patterns in `envoys.vgo` for host targeting.
 
-7. **No ad-hoc `ansible` command.** For one-off commands across the fleet, use `vigocli task run` or `vigocli query run` — these dispatch through the agent stream.
+7. **No ad-hoc `ansible` command.** For one-off commands across the fleet, use `vigocli task run` (or `vigocli traits livequery` to read a trait) — these dispatch through the agent stream.
 
 8. **Agent must be installed first.** Ansible needs only SSH. Vigo requires bootstrapping the agent binary on each node. Use `curl -sSfk https://<server>:8443/bootstrap | sudo sh` for automated enrollment.
 

@@ -21,7 +21,7 @@ docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
 cd /srv/vigo && docker compose up -d
 ```
 
-`--seed-only` fills `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, TLS certificates, and example configs, and `docker compose up -d` starts the server. The dashboard is at `https://localhost:8443/`. Then enroll the server's own agent over loopback with `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh`.
+`--seed-only` fills `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, and example configs, and `docker compose up -d` starts the server, which generates its CA and TLS certificates under `/srv/vigo/tls/` on first start. The dashboard is at `https://localhost:8443/`. Then enroll the server's own agent over loopback with `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh`.
 
 ### 2. Bootstrap managed nodes
 
@@ -435,10 +435,10 @@ steps:
 
 ### Live queries
 
-Query fleet state in real-time:
+Query a trait across the fleet in real time (offline envoys answer from their last cached value):
 
 ```bash
-vigocli query run "df -h /var" --target "*.db.example.com"
+vigocli traits livequery os.distro --target '*.db.example.com'
 ```
 
 ## Authentication

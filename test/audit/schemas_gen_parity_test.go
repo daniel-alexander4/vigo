@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -20,15 +21,17 @@ import (
 // be a second source that could drift.
 //
 // The script needs bash + gofmt + GNU `grep -P` + the Rust executor source.
-// Where any of those is absent (e.g. macOS BSD grep) it can't run, so the test
-// SKIPS on any run failure and only FAILS on a clean run that disagrees — it
-// never false-fails. Effective on Linux (CI + the dev box), which is where
-// drift is caught before merge.
+// Where the toolchain is absent (e.g. macOS BSD grep) the test SKIPS, naming
+// what is missing. With the toolchain present, a generator that fails is a
+// FAILURE: a generator regression must not hide the very drift it guards.
 func TestSchemasGenUpToDate(t *testing.T) {
 	root := repoRoot(t)
 	script := filepath.Join(root, "scripts", "gen-executor-schemas.sh")
 	if _, err := os.Stat(script); err != nil {
-		t.Skipf("generator script not found: %v", err)
+		t.Fatalf("generator script missing (it is tracked): %v", err)
+	}
+	if missing := missingSchemaGenTools(); missing != "" {
+		t.Skipf("generator toolchain unavailable: %s", missing)
 	}
 
 	committed, err := os.ReadFile(filepath.Join(root, "server", "validate", "schemas_gen.go"))
@@ -42,9 +45,7 @@ func TestSchemasGenUpToDate(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		// bash / gofmt / GNU grep -P / the Rust source absent, or the script
-		// otherwise couldn't run — not a drift signal, so skip rather than fail.
-		t.Skipf("generator did not run cleanly (%v); stderr: %s", err, stderr.String())
+		t.Fatalf("generator failed with its toolchain present (%v) — fix scripts/gen-executor-schemas.sh; stderr: %s", err, stderr.String())
 	}
 
 	if !bytes.Equal(stdout.Bytes(), committed) {
@@ -52,4 +53,22 @@ func TestSchemasGenUpToDate(t *testing.T) {
 			"An executor or its params changed without regenerating, or the file was hand-edited.\n" +
 			"Run `make schemas` and commit the result.")
 	}
+}
+
+// missingSchemaGenTools names the first generator prerequisite that is absent:
+// bash, gofmt, or a grep that supports -P (GNU grep; BSD grep does not).
+// Empty when all are present.
+func missingSchemaGenTools() string {
+	for _, tool := range []string{"bash", "gofmt", "grep"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			return tool + " not on PATH"
+		}
+	}
+	// grep -P exits 0/1 on match/no-match and 2 when -P is unsupported.
+	probe := exec.Command("grep", "-P", "x")
+	probe.Stdin = strings.NewReader("x\n")
+	if err := probe.Run(); err != nil {
+		return "grep has no -P (PCRE) support"
+	}
+	return ""
 }

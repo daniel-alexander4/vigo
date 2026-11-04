@@ -126,3 +126,60 @@ func TestCLINoDuplicateSubcommands(t *testing.T) {
 		}
 	})
 }
+
+// exampleCommandLines returns the lines of a command's Example and Long text
+// that an operator would paste: those that start with "vigocli ". In Long,
+// only indented lines count — a column-0 line is prose ("vigocli communicates
+// with…"), an indented one is an example block.
+func exampleCommandLines(c *cobra.Command) []string {
+	var out []string
+	for _, line := range strings.Split(c.Example, "\n") {
+		if l := strings.TrimSpace(line); strings.HasPrefix(l, "vigocli ") {
+			out = append(out, l)
+		}
+	}
+	for _, line := range strings.Split(c.Long, "\n") {
+		if l := strings.TrimSpace(line); strings.HasPrefix(l, "vigocli ") && l != line && strings.TrimLeft(line, " \t") == l {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// TestCLIExampleLinesPasteClean extends the copy-paste contract to the shape
+// of each example line: it must name a command that exists and can run, and
+// any description sharing the line must sit behind a `#`. A description run
+// on after the command ("…  Show the framework->controls map") is pasted as
+// extra arguments, and its `>` creates a file named after the next word.
+func TestCLIExampleLinesPasteClean(t *testing.T) {
+	walkCommands(rootCmd, func(c *cobra.Command) {
+		for _, line := range exampleCommandLines(c) {
+			cmdPart := line
+			if i := strings.Index(cmdPart, "#"); i >= 0 {
+				cmdPart = cmdPart[:i]
+			}
+			cmdPart = strings.TrimRight(cmdPart, " ")
+			if strings.Contains(cmdPart, "  ") {
+				t.Errorf("%q: example line carries text after a double space without a `#` — a paste passes it as arguments:\n    %s", c.CommandPath(), line)
+			}
+			var words []string
+			for _, w := range strings.Fields(cmdPart)[1:] {
+				if strings.HasPrefix(w, "-") || strings.ContainsAny(w, "|><&;$'\"") {
+					break
+				}
+				words = append(words, w)
+			}
+			// A group with nothing after it prints its help, which is a
+			// fine thing to paste; a group followed by more words means a
+			// subcommand that does not exist.
+			found, rest, err := rootCmd.Find(words)
+			if err != nil || found == nil || (!found.Runnable() && len(rest) > 0) {
+				name := "<none>"
+				if found != nil {
+					name = found.CommandPath()
+				}
+				t.Errorf("%q: example line does not reach a runnable command (resolved %s, err %v):\n    %s", c.CommandPath(), name, err, line)
+			}
+		}
+	})
+}

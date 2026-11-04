@@ -17,6 +17,8 @@ Vigo has two CLI binaries:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--server` | `https://localhost:8443` | Base URL for the Vigo REST API |
+| `--ca-file` | `$VIGO_CA_FILE`, else `/srv/vigo/tls/ca` | CA bundle that verifies the server's TLS certificate. A loopback `--server` (`localhost`, `127.0.0.1`, `::1`) is always verified against it, and vigocli refuses to connect if it can't read it. For any other `--server` the system roots are used unless you name a CA here. |
+| `--insecure` | `false` | Skip TLS certificate verification entirely. Your API token goes to whatever answers `--server`, so use it only when you have no copy of the CA. |
 | `--yes` | `false` | Skip the confirmation prompt on destructive commands (revoke, delete, purge, rollback, restore, drain, …). **Required for non-interactive use** — without a TTY and without `--yes`, a destructive command errors loudly instead of silently doing nothing. |
 
 ## Commands

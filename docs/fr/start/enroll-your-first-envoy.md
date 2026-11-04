@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:7ffe22fa8c58e5c852079d8889c00ac0695b52c565eff45e3f219568e29d3caf -->
+<!-- vigo-i18n source_sha:75163443cb428bb2eca0dd9835f3c284931eae22e5fc614103a43061ac0c2341 -->
 
 # 2 · Enrôlez votre premier Envoy
 
@@ -17,17 +17,18 @@ La mise en route du serveur a enrôlé son propre hôte via la loopback ([tutori
 Décidez quels noms d'hôte vous autorisez à s'enrôler, puis émettez un jeton qui leur est restreint :
 
 ```bash
-vigocli tokens generate --pattern '*.example.com'
+vigocli tokens generate
+vigocli approved add '*.example.com' --token <token>
 ```
 
-Cela affiche un jeton à usage unique (haché au repos côté serveur ; il ne peut pas être réutilisé). Le `--pattern` est un garde-fou d'enrôlement — seuls les noms d'hôte qui le respectent peuvent s'enregistrer.
+La première commande affiche un jeton à usage unique ; la seconde le lie à un motif de noms d'hôte (haché au repos côté serveur ; il ne peut pas être réutilisé). Seuls les noms d'hôte qui respectent le motif peuvent s'enregistrer avec lui.
 
 ## 2. Lancer l'installateur sur la nouvelle machine
 
 Sur le **nouvel** hôte, récupérez et lancez l'installateur bootstrap en passant le jeton :
 
 ```bash
-curl -sSfk https://<server-host>:8443/bootstrap | sudo sh -s -- --token <token>
+curl -sSfk "https://<server-host>:8443/bootstrap?token=<token>" | sudo sh
 ```
 
 L'installateur télécharge le binaire de l'agent, génère un CSR, s'enrôle (le serveur le signe après avoir vérifié le pattern + le jeton), installe un service natif (systemd / launchd / …) et le démarre. L'agent est installé dans `/usr/local/sbin/vigo`.

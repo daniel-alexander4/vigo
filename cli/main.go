@@ -40,6 +40,10 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "https://localhost:8443",
 		"Base URL for the Vigo REST API")
+	rootCmd.PersistentFlags().StringVar(&caFileFlag, "ca-file", "",
+		"CA bundle that verifies the server's TLS certificate (default $VIGO_CA_FILE, else /srv/vigo/tls/ca for a loopback --server)")
+	rootCmd.PersistentFlags().BoolVar(&insecureTLS, "insecure", false,
+		"Skip TLS certificate verification (sends your token to whatever answers --server)")
 	// Global skip-confirmation flag for destructive commands. confirmAction
 	// reads it (via inherited-flag Lookup); without it, a non-TTY invocation
 	// of a destructive command errors loudly instead of silently no-opping.

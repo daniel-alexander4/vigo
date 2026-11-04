@@ -59,10 +59,20 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Ensure Go and Cargo are in PATH (sudo strips user PATH).
-export PATH="/usr/local/go/bin:$HOME/.cargo/bin:/home/dan/.cargo/bin:$PATH"
-export GOPATH="${GOPATH:-/home/dan/go}"
+# Ensure Go and Cargo are in PATH (sudo strips user PATH). The toolchains
+# belong to the user who ran sudo, so resolve that user's home from the
+# passwd database rather than assuming one; with no SUDO_USER (a real root
+# login) fall back to root's own home.
+BUILD_HOME=""
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    BUILD_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6 || true)"
+fi
+BUILD_HOME="${BUILD_HOME:-$HOME}"
+export PATH="/usr/local/go/bin:$BUILD_HOME/.cargo/bin:$HOME/.cargo/bin:$PATH"
+export GOPATH="${GOPATH:-$BUILD_HOME/go}"
 
+# A fresh install has no data dir yet (the README runs this before seeding).
+mkdir -p "$DATA_DIR"
 cd "$DATA_DIR"
 
 usage() {
@@ -610,8 +620,8 @@ if $DO_FULL; then
     fi
 
     # Host vigocli — extracted from the freshly built image (works whether or
-    # not the container is up). Root-only: peer auth trusts any localhost
-    # caller, so the 0700 file mode is the gate.
+    # not the container is up). Root-only (0700): it is the binary that reads
+    # the root-only local-admin token.
     echo "Updating host vigocli..."
     cid="$(docker create "$IMAGE")"
     docker cp "$cid:/usr/local/bin/vigocli" /usr/local/bin/vigocli
@@ -700,7 +710,11 @@ if ! $DO_FULL && { $DO_SERVERONLY || [ ${#CROSS_TARGETS[@]} -gt 0 ]; }; then
 fi
 
 echo ""
-docker compose ps
+# Before the first --seed-only there is no .env, and compose refuses to parse
+# a file whose env_file is missing; there is nothing to list yet anyway.
+if [ -f "$DATA_DIR/.env" ]; then
+    docker compose ps
+fi
 
 # ---------------------------------------------------------------------------
 # Config health check

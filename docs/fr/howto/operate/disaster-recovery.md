@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:4f737148b57a1a6a9278b9b399f10351cd77a6a58d30550376e3624bec00802b -->
+<!-- vigo-i18n source_sha:0de99b706735c88198066e538a3b4460d599db370f6fdeacd76de16734edd3f3 -->
 
 # Reprise après sinistre
 
@@ -138,8 +138,8 @@ vigocli backup restore /path/to/backup.tar.gz --db-only
 
 # 2. A new master key will be auto-generated on next start.
 #    Re-create all secrets:
-vigocli secrets set vigo/db/dsn
-vigocli secrets set vigo/smtp/password
+vigocli secrets set raw vigo/db/dsn
+vigocli secrets set raw vigo/smtp/password
 # ... repeat for each secret referenced in your config
 
 # 3. Publish and start

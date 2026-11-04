@@ -1,6 +1,7 @@
 FROM rust:alpine AS rust-builder
 
-RUN apk add --no-cache musl-dev protobuf-dev
+# GNU grep: the version sidecar below reads the binary with `grep -a`.
+RUN apk add --no-cache musl-dev protobuf-dev grep
 
 WORKDIR /build
 
@@ -25,11 +26,16 @@ RUN mkdir -p agent/src && echo "fn main() {}" > agent/src/main.rs \
 # agent's compiled-in version into a sidecar file so the runtime stage can
 # advertise it via /api/v1/agent/latest. Without this, cross-arch envoys can
 # end up in update loops — the server can't run a foreign-arch binary to
-# probe its version, so it relies on this sidecar.
+# probe its version, so it relies on this sidecar. The version comes from the
+# binary's own VIGO-BUILD-VERSION marker, never from Cargo.toml, so the sidecar
+# cannot disagree with the binary it labels (same rule as the Makefile's
+# dist-agent and upgrade.sh's agent_bin_version).
 COPY agent/src/ agent/src/
-RUN cd agent && touch src/main.rs \
-    && cargo build --release --target x86_64-unknown-linux-musl \
-    && grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/' > /build/agent/vigo.version
+RUN set -e; cd agent; touch src/main.rs; \
+    cargo build --release --target x86_64-unknown-linux-musl; \
+    v="$(grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' target/x86_64-unknown-linux-musl/release/vigo | head -1 | cut -d= -f2)"; \
+    [ -n "$v" ] || { echo "ERROR: no VIGO-BUILD-VERSION marker in the built agent" >&2; exit 1; }; \
+    printf '%s\n' "$v" > /build/agent/vigo.version
 
 FROM golang:1.25-alpine AS go-builder
 

@@ -5,9 +5,11 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/secrets"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/term"
@@ -123,7 +126,7 @@ func writeVerifier(passphrase string) error {
 		return fmt.Errorf("writing verifier: %w", err)
 	}
 	if err := os.Rename(tmp, p); err != nil {
-		_ = os.Remove(tmp)
+		_ = os.Remove(tmp) // best-effort: the rename error is the one reported
 		return fmt.Errorf("installing verifier: %w", err)
 	}
 	return nil
@@ -194,7 +197,7 @@ func writeSentinel(expiresAt time.Time) error {
 		return fmt.Errorf("writing sentinel: %w", err)
 	}
 	if err := os.Rename(tmp, p); err != nil {
-		_ = os.Remove(tmp)
+		_ = os.Remove(tmp) // best-effort: the rename error is the one reported
 		return fmt.Errorf("installing sentinel: %w", err)
 	}
 	return nil
@@ -225,8 +228,16 @@ func isUnlocked() bool {
 }
 
 // bumpSentinel rewrites the sentinel with a fresh idleTTL-from-now expiry.
-// Best-effort: failure to bump doesn't fail the gated call (the operator is
-// already authenticated for this session; the next call will re-check).
+// Best-effort: failure to bump doesn't fail the gated call (the unlock window
+// is already open; the next call will re-check).
+//
+// The sentinel is one host-wide file holding a plain timestamp: every account
+// that can run vigocli against /srv/vigo shares the same window, and anyone who
+// can write /srv/vigo can open it without the passphrase. That is the intended
+// strength — the gate is advisory friction in vigocli, not an access boundary
+// (LocalProvider reads the encrypted files directly). Signing the timestamp
+// would not change that: whoever can write the sentinel can also read the
+// verifier any such key would come from.
 func bumpSentinel() {
 	_ = writeSentinel(time.Now().Add(idleTTL))
 }
@@ -330,11 +341,16 @@ func initVerifierPrompt() error {
 
 var secretsUnlockCmd = &cobra.Command{
 	Use:   "unlock",
-	Short: "Unlock the secrets vault for this operator session",
-	Long: `Unlocks the secrets vault so the gated verbs (set, reveal, delete, list)
-become available. The unlock state persists for 24h of inactivity; every
-successful gated command extends the window. Use 'lock' to end the session
-explicitly.`,
+	Short: "Open the host-wide unlock window for the gated secrets verbs",
+	Long: `Opens the unlock window so the gated verbs (set, reveal, delete, list)
+become available. The window is host-wide, not per operator: one sentinel file
+under /srv/vigo, shared by every account that runs vigocli on this host. It
+stays open for 24h of inactivity; every successful gated command extends it.
+Use 'lock' to close it explicitly.
+
+The gate is advisory. It keeps vigocli from touching secret values by
+accident; it does not stop anyone who can read the master key and the
+encrypted files, or who can write /srv/vigo.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !verifierExists() {
 			return errors.New("secrets vault not initialized — run `vigocli secrets init` first")
@@ -403,18 +419,20 @@ re-unlock with the new passphrase.`,
 
 var secretsResetCmd = &cobra.Command{
 	Use:   "reset",
-	Short: "Break-glass: replace the unlock passphrase by proving you can read the master key",
+	Short: "Break-glass: replace the unlock passphrase by proving you hold the master key",
 	Long: `Replaces the unlock passphrase without knowing the current one. Requires
-read access to the master key file (the same access level needed to decrypt
-secrets anyway). Typed confirmation required to avoid accidents.`,
+the master key file (the same access level needed to decrypt secrets anyway):
+it must be a well-formed key (64 hex characters or 32 raw bytes), and when the
+vault holds secrets, at least one of them must decrypt under it. Typed
+confirmation required to avoid accidents.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		keyFile, _ := cmd.Flags().GetString("key-file")
 		secretsDir, _ := cmd.Flags().GetString("secrets-dir")
 		if keyFile == "" {
 			keyFile = filepath.Join(secretsDir, ".master.key")
 		}
-		if _, err := os.ReadFile(keyFile); err != nil {
-			return fmt.Errorf("cannot prove master-key access (read %s): %w", keyFile, err)
+		if err := proveMasterKey(keyFile, secretsDir); err != nil {
+			return err
 		}
 
 		if !term.IsTerminal(int(os.Stdin.Fd())) {
@@ -443,6 +461,42 @@ secrets anyway). Typed confirmation required to avoid accidents.`,
 		recordSecretsEvent("secrets.passphrase_reset", nil)
 		return nil
 	},
+}
+
+// proveMasterKey is the break-glass proof `secrets reset` demands. Being able
+// to read some file is not enough: the file must be a well-formed master key,
+// and if the vault holds any secret, at least one must decrypt under it — the
+// only check that tells the real key from any other well-formed one. (The
+// provider itself hashes malformed key material into a key rather than
+// refusing it, so NewLocalProvider succeeding proves nothing.)
+func proveMasterKey(keyFile, secretsDir string) error {
+	raw, err := os.ReadFile(keyFile)
+	if err != nil {
+		return fmt.Errorf("cannot prove master-key access (read %s): %w", keyFile, err)
+	}
+	trimmed := strings.TrimSpace(string(raw))
+	if b, hexErr := hex.DecodeString(trimmed); !(hexErr == nil && len(b) == 32) && len(raw) != 32 {
+		return fmt.Errorf("%s is not a master key (want 64 hex characters or 32 raw bytes)", keyFile)
+	}
+	p, err := secrets.NewLocalProvider(keyFile, secretsDir)
+	if err != nil {
+		return fmt.Errorf("cannot prove master-key access: %w", err)
+	}
+	defer p.Close()
+	keys, err := p.List()
+	if err != nil {
+		return fmt.Errorf("cannot prove master-key access: %w", err)
+	}
+	if len(keys) == 0 {
+		fmt.Printf("  The vault holds no secrets, so %s is accepted as a well-formed key only.\n", keyFile)
+		return nil
+	}
+	for _, k := range keys {
+		if _, err := p.Get(context.Background(), k); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s does not decrypt any secret in %s — it is not this vault's master key", keyFile, secretsDir)
 }
 
 func init() {

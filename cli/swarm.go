@@ -70,12 +70,12 @@ six content subsystems ride on.
 This command is the SUBSTRATE. For the content verbs that used to live
 under 'vigocli swarm distribute' etc., see:
 
-  vigocli swarm filecast      — admin-pushed filecasts (was 'swarm distribute')
-  vigocli swarm gitback     — personal-DR git mirror fleet view
-  vigocli swarm longdrawer      — per-user plaintext directory sync mesh
-  vigocli swarm lockbox     — per-user encrypted directory sync mesh
-  vigocli swarm curator     — P2P artifact registry fleet view
-  vigocli swarm poolq       — P2P ordered-log queue fleet view
+  vigocli swarm filecast     # admin-pushed filecasts (was 'swarm distribute')
+  vigocli swarm gitback      # personal-DR git mirror fleet view
+  vigocli swarm longdrawer   # per-user plaintext directory sync mesh
+  vigocli swarm lockbox      # per-user encrypted directory sync mesh
+  vigocli swarm curator      # P2P artifact registry fleet view
+  vigocli swarm poolq        # P2P ordered-log queue fleet view
 
 Subcommands here report substrate health: who is reachable, who has a
 blob cache, who is seeding, total footprint across the fleet.`,

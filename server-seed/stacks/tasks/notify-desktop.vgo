@@ -38,29 +38,45 @@ script: |
 
     if [ -n "$CONSOLE_USER" ]; then
       CONSOLE_UID=$(id -u "$CONSOLE_USER" 2>/dev/null)
-      su - "$CONSOLE_USER" -c "DISPLAY=$DISPLAY_NUM DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$CONSOLE_UID/bus notify-send -u '$PARAM_URGENCY' '$PARAM_TITLE' '$PARAM_MESSAGE'" 2>/dev/null
+      # Parameter values travel in the environment and are expanded only
+      # inside the user's shell, as quoted arguments. Never splice them into
+      # the -c string: an apostrophe in the message would end the quoting and
+      # run the rest as a command as the console user. Plain `su` (not `su -`)
+      # keeps the environment.
+      export DISPLAY="$DISPLAY_NUM"
+      export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$CONSOLE_UID/bus"
+      su -s /bin/sh "$CONSOLE_USER" \
+        -c 'exec notify-send -u "${PARAM_URGENCY:-normal}" -- "${PARAM_TITLE:-Vigo}" "$PARAM_MESSAGE"' 2>/dev/null
       echo "notification sent to $CONSOLE_USER on $DISPLAY_NUM"
       exit 0
     fi
     echo "no console user found" >&2
     exit 1
 
-  # Windows: use PowerShell toast notification.
+  # Windows: use PowerShell toast notification. The script text below is a
+  # constant (single-quoted for sh); PowerShell reads the values from the
+  # environment and XML-escapes them, so nothing in a parameter is parsed as
+  # PowerShell or as toast markup.
   elif command -v powershell.exe >/dev/null 2>&1; then
-    powershell.exe -NoProfile -Command "
+    powershell.exe -NoProfile -Command '
       [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
       [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null
-      \$xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
-      \$xml.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>$PARAM_TITLE</text><text>$PARAM_MESSAGE</text></binding></visual></toast>')
-      \$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Vigo')
-      \$notifier.Show([Windows.UI.Notifications.ToastNotification]::new(\$xml))
-    "
+      $title = [System.Security.SecurityElement]::Escape($env:PARAM_TITLE)
+      $body = [System.Security.SecurityElement]::Escape($env:PARAM_MESSAGE)
+      $xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
+      $xml.LoadXml("<toast><visual><binding template=""ToastGeneric""><text>$title</text><text>$body</text></binding></visual></toast>")
+      $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Vigo")
+      $notifier.Show([Windows.UI.Notifications.ToastNotification]::new($xml))
+    '
     echo "toast notification sent"
     exit 0
 
-  # macOS: use osascript.
+  # macOS: use osascript. The values arrive as argv to a constant AppleScript
+  # run handler, so quotes in them are data, not script.
   elif command -v osascript >/dev/null 2>&1; then
-    osascript -e "display notification \"$PARAM_MESSAGE\" with title \"$PARAM_TITLE\""
+    osascript -e 'on run argv' \
+      -e 'display notification (item 2 of argv) with title (item 1 of argv)' \
+      -e 'end run' "${PARAM_TITLE:-Vigo}" "$PARAM_MESSAGE"
     echo "notification sent via osascript"
     exit 0
 

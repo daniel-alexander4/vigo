@@ -6,7 +6,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -105,12 +104,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		httpReq.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	client := &http.Client{Timeout: 5 * time.Minute}
-	if isLocalhost(serverURL) {
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
+	client := newCLIHTTPClient(serverURL, 5*time.Minute)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("cannot reach server: %w", err)
@@ -118,7 +112,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(resp.Body) // best-effort: the status code is the error; the body only adds detail
 		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(respBody))
 	}
 

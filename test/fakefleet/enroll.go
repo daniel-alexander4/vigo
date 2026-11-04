@@ -127,6 +127,13 @@ func publishConfig(cfg config) error {
 		"--server-root", cfg.serverRoot)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	// vigocli pins the server CA for a loopback --server. The CA lives under
+	// the same server root the publish targets, so name it unless the caller
+	// already did.
+	cmd.Env = os.Environ()
+	if os.Getenv("VIGO_CA_FILE") == "" {
+		cmd.Env = append(cmd.Env, "VIGO_CA_FILE="+filepath.Join(cfg.serverRoot, "tls", "ca"))
+	}
 
 	// vigocli authenticates from VIGO_CONFIG_DIR/token (then the server-host
 	// local-admin file). On the server host the file path resolves and the
@@ -141,7 +148,7 @@ func publishConfig(cfg config) error {
 		if err := os.WriteFile(filepath.Join(dir, "token"), []byte(cfg.adminToken), 0o600); err != nil {
 			return fmt.Errorf("writing cli token: %w", err)
 		}
-		cmd.Env = append(os.Environ(), "VIGO_CONFIG_DIR="+dir)
+		cmd.Env = append(cmd.Env, "VIGO_CONFIG_DIR="+dir)
 	}
 
 	if err := cmd.Run(); err != nil {

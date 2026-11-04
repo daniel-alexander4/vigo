@@ -39,6 +39,7 @@ func builtinExecutorTypes(t *testing.T, root string) map[string]bool {
 	insertRe := regexp.MustCompile(`executors\.insert\("([^"]+)"`)
 	seen := map[string]bool{}
 	for _, m := range insertRe.FindAllStringSubmatch(string(data), -1) {
+		// Test mocks (mock, mock-changed, mock-same, …) are not types.
 		if m[1] == "mock" || strings.HasPrefix(m[1], "mock-") {
 			continue
 		}
@@ -224,7 +225,8 @@ func parseDerivedRows(t *testing.T, root string) []derivedRow {
 	if os.IsNotExist(err) {
 		// docs/internal.docs/ is maintainer-only and not part of the public
 		// repository; the registry guard runs where the registry exists.
-		t.Skip("numbers-of-record.md not present (maintainer-only)")
+		t.Skip("skipping registry parity: docs/internal.docs/numbers-of-record.md is maintainer-only " +
+			"(gitignored, absent from public clones); this check runs only in a checkout that has it")
 	}
 	if err != nil {
 		t.Fatalf("reading numbers-of-record.md: %v", err)

@@ -97,13 +97,14 @@ Envoys matching both the hostname glob and source CIDR enroll without a token.
 For stricter environments, generate a token:
 
 ```bash
-vigocli tokens generate --pattern "web3.example.com"
+vigocli tokens generate
+vigocli approved add 'web3.example.com' --token <token>
 ```
 
 Pass the token to the bootstrap script:
 
 ```bash
-curl -sSfk https://<server>:8443/bootstrap | sudo sh -s -- --token <token>
+curl -sSfk "https://<server>:8443/bootstrap?token=<token>" | sudo sh
 ```
 
 Tokens are:

@@ -25,6 +25,25 @@ Config inspection commands.
 | `config examples list` | Show available install templates under `stacks-examples/` |
 | `config examples copy <name>` | Copy an install template into `stacks/` |
 
+## config server.yaml
+
+Annotated `server.yaml` reference. Has subcommands: `full`, `list`.
+
+`full` prints the whole annotated file with every option, default, and description. Redirect it to a new file, never over your live `server.yaml`:
+
+```bash
+vigocli config server.yaml full
+vigocli config server.yaml full > server.yaml.example
+```
+
+`list` lists the configuration sections, or shows one:
+
+```bash
+vigocli config server.yaml list
+vigocli config server.yaml list smtp
+vigocli config server.yaml list ai
+```
+
 ## config edit
 
 Open a `.vgo` config file in an editor with YAML validation on save. Accepts a configcrate name, relative path, or absolute path. Configcrate names are searched recursively in `stacks/configcrates/`.

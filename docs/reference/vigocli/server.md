@@ -5,29 +5,6 @@ Manage peer replication: promote a peer to primary, check replication status.
 
 ## Subcommands
 
-### server.yaml
-
-Annotated `server.yaml` reference. Has subcommands: `full`, `list`.
-
-#### server.yaml full
-
-Print the full annotated `server.yaml` with all options, defaults, and descriptions.
-
-```bash
-vigocli server server.yaml full
-vigocli server server.yaml full > server.yaml
-```
-
-#### server.yaml list
-
-List all configuration sections, or show a specific section.
-
-```bash
-vigocli server server.yaml list
-vigocli server server.yaml list smtp
-vigocli server server.yaml list ai
-```
-
 ### promote
 
 Promote a peer server to primary role. Takes effect at runtime, no restart: the

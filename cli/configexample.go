@@ -19,8 +19,8 @@ var serverYamlCmd = &cobra.Command{
 var serverYamlFullCmd = &cobra.Command{
 	Use:   "full",
 	Short: "Print the full annotated server.yaml with all options, defaults, and descriptions",
-	Example: `  vigocli server server.yaml full
-  vigocli server server.yaml full > server.yaml`,
+	Example: `  vigocli config server.yaml full
+  vigocli config server.yaml full > server.yaml.example`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printColoredExample(config.ExampleServerConfig)
 		return nil
@@ -30,9 +30,9 @@ var serverYamlFullCmd = &cobra.Command{
 var serverYamlListCmd = &cobra.Command{
 	Use:   "list [section]",
 	Short: "List all sections, or show a specific section",
-	Example: `  vigocli server server.yaml list
-  vigocli server server.yaml list smtp
-  vigocli server server.yaml list ai`,
+	Example: `  vigocli config server.yaml list
+  vigocli config server.yaml list smtp
+  vigocli config server.yaml list ai`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		content := config.ExampleServerConfig
 		if len(args) == 0 {

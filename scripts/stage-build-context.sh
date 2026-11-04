@@ -23,8 +23,9 @@ DEST_DIR="$2"
 [ -d "$DEST_DIR" ] || { echo "dest dir not found: $DEST_DIR" >&2; exit 1; }
 
 # Mirror the repo's .dockerignore exclusions: skip the Rust target dirs
-# (54+ GiB), host build outputs, git history, TLS certs, IDE state,
-# Claude scratch, and test/coverage artifacts.
+# (54+ GiB), host build outputs, git history, TLS certs, private keys (the
+# signing key travels only as a BuildKit secret), IDE state, Claude scratch,
+# and test/coverage artifacts.
 rsync -a \
     --exclude='agent/target/' \
     --exclude='agent/.build/' \
@@ -33,6 +34,8 @@ rsync -a \
     --exclude='dist/cli/' \
     --exclude='.git/' \
     --exclude='certs/' \
+    --exclude='signing.key' \
+    --exclude='*.key' \
     --exclude='.vscode/' \
     --exclude='.idea/' \
     --exclude='*.out' \

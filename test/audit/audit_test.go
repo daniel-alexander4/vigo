@@ -168,32 +168,15 @@ func TestDocLinksNotBroken(t *testing.T) {
 func TestEveryExecutorHasDocPage(t *testing.T) {
 	root := repoRoot(t)
 
-	modPath := filepath.Join(root, "agent", "src", "runner", "mod.rs")
-	data, err := os.ReadFile(modPath)
-	if err != nil {
-		t.Fatalf("reading runner/mod.rs: %v", err)
-	}
-
-	// Extract unique executor type names from executors.insert("name", ...) lines.
-	insertRe := regexp.MustCompile(`executors\.insert\("([^"]+)"`)
-	seen := map[string]bool{}
-	for _, m := range insertRe.FindAllStringSubmatch(string(data), -1) {
-		name := m[1]
-		// Skip test mocks.
-		if name == "mock" || strings.HasPrefix(name, "mock-") {
-			continue
-		}
-		seen[name] = true
-	}
-
-	if len(seen) == 0 {
-		t.Fatal("found no executor types in runner/mod.rs")
-	}
+	// Executor type names from executors.insert("name", ...) — the shared
+	// deriver the count and numbers-of-record guards also read.
+	seen := builtinExecutorTypes(t, root)
 
 	// Some executors are registered under a short name (e.g., "registry")
 	// but their doc pages use the platform-qualified name (e.g.,
-	// "registry_windows.md"). Accept either the exact name or any
-	// <name>_<platform>.md variant.
+	// "registry_windows.md"). Accept either the exact name or a
+	// <name>_<platform>.md supplement — but never a page that belongs to
+	// another executor (`file` is not documented by `file_line.md`).
 	docsDir := filepath.Join(root, "docs", "reference", "vigo", "resources")
 
 	// Build a set of all available doc page base names (without .md).
@@ -207,19 +190,7 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 
 	var missing []string
 	for name := range seen {
-		// Direct match.
-		if docNames[name] {
-			continue
-		}
-		// Platform-suffixed match: look for <name>_<platform>.md.
-		found := false
-		for docName := range docNames {
-			if strings.HasPrefix(docName, name+"_") {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !docPageCovers(name, docNames, seen) {
 			missing = append(missing, name)
 		}
 	}
@@ -227,6 +198,38 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 	sort.Strings(missing)
 	if len(missing) > 0 {
 		t.Errorf("executors missing doc pages in docs/reference/vigo/resources/:\n  %s", strings.Join(missing, "\n  "))
+	}
+}
+
+// docPageCovers reports whether name has a doc page: <name>.md itself, or a
+// per-platform supplement <name>_<suffix>.md whose basename is not another
+// known name. Without the second condition any prefix-sibling counted —
+// `file` passed on `file_line.md` alone.
+func docPageCovers(name string, docNames, known map[string]bool) bool {
+	if docNames[name] {
+		return true
+	}
+	for docName := range docNames {
+		if strings.HasPrefix(docName, name+"_") && !known[docName] {
+			return true
+		}
+	}
+	return false
+}
+
+// TestDocPageCoversRejectsSibling pins the coverage rule: a per-platform
+// supplement documents its base name, another type's page does not.
+func TestDocPageCoversRejectsSibling(t *testing.T) {
+	known := map[string]bool{"file": true, "file_line": true, "registry": true}
+	docs := map[string]bool{"file_line": true, "registry_windows": true}
+	if docPageCovers("file", docs, known) {
+		t.Error("file must not be covered by file_line.md, another type's page")
+	}
+	if !docPageCovers("registry", docs, known) {
+		t.Error("registry must be covered by its registry_windows.md supplement")
+	}
+	if !docPageCovers("file_line", docs, known) {
+		t.Error("file_line must be covered by its own page")
 	}
 }
 
@@ -260,17 +263,7 @@ func TestEveryTraitHasDocPage(t *testing.T) {
 
 	var missing []string
 	for name := range seen {
-		if docNames[name] {
-			continue
-		}
-		found := false
-		for docName := range docNames {
-			if strings.HasPrefix(docName, name+"_") {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !docPageCovers(name, docNames, seen) {
 			missing = append(missing, name)
 		}
 	}
@@ -610,11 +603,16 @@ func TestRESTEndpointsDocumented(t *testing.T) {
 	}
 }
 
-// ---------- 5. TestNoIgnoredErrors ----------
+// ---------- 5. TestNoBlankDiscardedErrors ----------
 
-func TestNoIgnoredErrors(t *testing.T) {
+// TestNoBlankDiscardedErrors catches one class: an error from a dangerous call
+// explicitly thrown away into `_` without an annotation, in server/ and cli/.
+// The other class — a bare statement that drops the error with no assignment
+// (`os.Remove(p)` on its own line) — is errcheck's, which `make lint` runs
+// (golangci-lint v2's standard set; see .golangci.yml). errcheck does not flag
+// `_ =` (check-blank is off), so the two do not overlap.
+func TestNoBlankDiscardedErrors(t *testing.T) {
 	root := repoRoot(t)
-	serverDir := filepath.Join(root, "server")
 
 	// Functions where ignoring the error return is a bug.
 	dangerousFuncs := []string{
@@ -651,68 +649,70 @@ func TestNoIgnoredErrors(t *testing.T) {
 
 	var violations []string
 
-	err := filepath.Walk(serverDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return err
-		}
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-		// Skip test files.
-		if strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		// Skip generated code.
-		rel, _ := filepath.Rel(root, path)
-		if strings.Contains(rel, "generated.code/") || strings.Contains(rel, "generated.code"+string(filepath.Separator)) {
-			return nil
-		}
-
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		scanner := bufio.NewScanner(f)
-		lineNo := 0
-		var prevLine string
-		for scanner.Scan() {
-			lineNo++
-			line := scanner.Text()
-
-			// An ignore is intentional only when it carries a standard
-			// annotation — on this line or the one above. A bare `//`
-			// (e.g. a URL in a string) no longer suppresses the check,
-			// which used to blind it to any commented line.
-			if hasIgnoreAnnotation(line) || hasIgnoreAnnotation(prevLine) {
-				prevLine = line
-				continue
+	for _, dir := range []string{"server", "cli"} {
+		err := filepath.Walk(filepath.Join(root, dir), func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			if !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			// Skip test files.
+			if strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			// Skip generated code.
+			rel, _ := filepath.Rel(root, path)
+			if strings.Contains(rel, "generated.code/") || strings.Contains(rel, "generated.code"+string(filepath.Separator)) {
+				return nil
 			}
 
-			for _, re := range patterns {
-				if re.MatchString(line) {
-					violations = append(violations, fmt.Sprintf("%s:%d: %s", rel, lineNo, strings.TrimSpace(line)))
-					break
+			f, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+
+			scanner := bufio.NewScanner(f)
+			lineNo := 0
+			var prevLine string
+			for scanner.Scan() {
+				lineNo++
+				line := scanner.Text()
+
+				// An ignore is intentional only when it carries a standard
+				// annotation — on this line or the one above. A bare `//`
+				// (e.g. a URL in a string) no longer suppresses the check,
+				// which used to blind it to any commented line.
+				if hasIgnoreAnnotation(line) || hasIgnoreAnnotation(prevLine) {
+					prevLine = line
+					continue
 				}
+
+				for _, re := range patterns {
+					if re.MatchString(line) {
+						violations = append(violations, fmt.Sprintf("%s:%d: %s", rel, lineNo, strings.TrimSpace(line)))
+						break
+					}
+				}
+				prevLine = line
 			}
-			prevLine = line
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walking %s/: %v", dir, err)
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walking server/: %v", err)
 	}
 
 	if len(violations) > 0 {
-		t.Errorf("found %d ignored error returns in server/ code:\n  %s",
+		t.Errorf("found %d blank-discarded error returns (annotate a deliberate one with // best-effort, // intentional or // ignore):\n  %s",
 			len(violations), strings.Join(violations, "\n  "))
 	}
 }
 
 // hasIgnoreAnnotation reports whether a line carries a standard
 // intentional-ignore marker. This is the sanctioned way to tell
-// TestNoIgnoredErrors a dropped error is deliberate.
+// TestNoBlankDiscardedErrors a dropped error is deliberate.
 func hasIgnoreAnnotation(line string) bool {
 	for _, marker := range []string{"// ignore", "// best-effort", "// intentional", "// nolint"} {
 		if strings.Contains(line, marker) {
@@ -724,30 +724,90 @@ func hasIgnoreAnnotation(line string) bool {
 
 // ---------- 6. TestNoSecretsInLogs ----------
 
+// Sensitive field names that should never be logged with a variable value.
+// Pattern: slog.String("password", variable) or "token", someVar.
+var secretLogFields = []string{"password", "secret", "private_key", "api_key", "token"}
+
+// Value expressions that are safe to log under a sensitive field name: an
+// identifier, a prefix, a count, a hash. Matched against the logged VALUE
+// (case- and underscore-insensitive: tokenID, token_id), never against the
+// whole line — a line-wide match let any line that merely mentioned "tokens"
+// log a raw secret.
+var secretLogSafeValues = []string{
+	"token_id", "token_prefix", "key_id", "key_path", "secret_path",
+	"token_count", "token_name", "token_type", "len(",
+	"password_hash", "hashed_password", "has_password",
+}
+
+// Match: "password", <variable> where the value is not a quoted string.
+var secretLogFieldPatterns = func() []*regexp.Regexp {
+	out := make([]*regexp.Regexp, 0, len(secretLogFields))
+	for _, field := range secretLogFields {
+		out = append(out, regexp.MustCompile(fmt.Sprintf(`"%s"\s*,\s*([^")\s][^,)]*[^")\s])`, field)))
+	}
+	return out
+}()
+
+// logLineLeaksSecret reports whether one source line is a log call that
+// passes a variable under a sensitive field name. Only single-line calls are
+// seen: the scan is line-based.
+func logLineLeaksSecret(line string) bool {
+	if !strings.Contains(line, "slog.") && !strings.Contains(line, "log.") {
+		return false
+	}
+	if strings.Contains(line, "// safe") || strings.Contains(line, "// not a secret") {
+		return false
+	}
+	normalize := func(s string) string { return strings.ReplaceAll(strings.ToLower(s), "_", "") }
+	for _, re := range secretLogFieldPatterns {
+		m := re.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		safe := false
+		for _, ok := range secretLogSafeValues {
+			if strings.Contains(normalize(m[1]), normalize(ok)) {
+				safe = true
+				break
+			}
+		}
+		if !safe {
+			return true
+		}
+	}
+	return false
+}
+
+// TestNoSecretsInLogsCatchesToken pins the scanner itself: a raw token is a
+// leak even on a line that mentions "tokens", and an identifier or count
+// under the same field name is not.
+func TestNoSecretsInLogsCatchesToken(t *testing.T) {
+	leaks := []string{
+		`slog.Info("tokens rotated", "token", tok)`,
+		`slog.Warn("login", "password", pw)`,
+		`slog.Info("created", "api_key", key)`,
+	}
+	for _, l := range leaks {
+		if !logLineLeaksSecret(l) {
+			t.Errorf("not flagged: %s", l)
+		}
+	}
+	safe := []string{
+		`slog.Info("tokens rotated", "token", tokenID)`,
+		`slog.Info("revoked", "token", len(tokens))`,
+		`slog.Info("created", "token", tok.Prefix) // safe: prefix only`,
+		`fmt.Println("token", tok)`,
+	}
+	for _, l := range safe {
+		if logLineLeaksSecret(l) {
+			t.Errorf("false positive: %s", l)
+		}
+	}
+}
+
 func TestNoSecretsInLogs(t *testing.T) {
 	root := repoRoot(t)
 	serverDir := filepath.Join(root, "server")
-
-	// Sensitive field names that should never appear as log values (unless safe).
-	// Pattern: slog.String("password", variable) or "token", someVar (not static strings).
-	sensitiveFields := []string{"password", "secret", "private_key", "api_key"}
-
-	// Safe patterns to skip (field names that include these words but are safe).
-	safePatterns := []string{
-		"token_id", "token_prefix", "key_id", "key_path", "secret_path",
-		"token_count", "token_name", "token_type", "tokens",
-		"password_hash", "hashed_password", "has_password",
-	}
-
-	// Build regex for each sensitive field.
-	// Match patterns like: slog.String("password", <not a string literal>)
-	// or: "password", password  (in slog.Any / slog group calls)
-	fieldPatterns := make([]*regexp.Regexp, 0, len(sensitiveFields))
-	for _, field := range sensitiveFields {
-		// Match: "password", <variable> where variable is not a quoted string.
-		re := regexp.MustCompile(fmt.Sprintf(`"%s"\s*,\s*([^")\s][^,)]*[^")\s])`, field))
-		fieldPatterns = append(fieldPatterns, re)
-	}
 
 	var violations []string
 
@@ -768,36 +828,8 @@ func TestNoSecretsInLogs(t *testing.T) {
 			return err
 		}
 
-		lines := strings.Split(string(data), "\n")
-		for lineNo, line := range lines {
-			// Only check lines with slog or log calls.
-			if !strings.Contains(line, "slog.") && !strings.Contains(line, "log.") {
-				continue
-			}
-
-			for _, re := range fieldPatterns {
-				m := re.FindStringSubmatch(line)
-				if m == nil {
-					continue
-				}
-
-				// Check against safe patterns.
-				isSafe := false
-				for _, safe := range safePatterns {
-					if strings.Contains(line, safe) {
-						isSafe = true
-						break
-					}
-				}
-				if isSafe {
-					continue
-				}
-
-				// Skip if the line has a comment indicating it's intentional.
-				if strings.Contains(line, "// safe") || strings.Contains(line, "// not a secret") {
-					continue
-				}
-
+		for lineNo, line := range strings.Split(string(data), "\n") {
+			if logLineLeaksSecret(line) {
 				violations = append(violations, fmt.Sprintf("%s:%d: %s", rel, lineNo+1, strings.TrimSpace(line)))
 			}
 		}
@@ -826,11 +858,13 @@ func TestExecutorCountConsistent(t *testing.T) {
 	seen["custom"] = true
 	codeCount := len(seen)
 
-	// Check docs/_index.md for the claimed count.
-	indexPath := filepath.Join(root, "docs", "_index.md")
+	// Check README.md for the claimed count. (This used to read docs/_index.md,
+	// which stopped stating the count in the 0.72 docs rebuild; the guard then
+	// skipped silently for every release since.)
+	indexPath := filepath.Join(root, "README.md")
 	indexData, err := os.ReadFile(indexPath)
 	if err != nil {
-		t.Fatalf("reading docs/_index.md: %v", err)
+		t.Fatalf("reading README.md: %v", err)
 	}
 
 	// Match the honest total in a phrase like "69 resource types". The
@@ -838,14 +872,16 @@ func TestExecutorCountConsistent(t *testing.T) {
 	// must headline the total — not a "built-in"-qualified subset, which
 	// would legitimately read 68 and never equal codeCount.
 	countRe := regexp.MustCompile(`(\d+)\s+resource\s+types?`)
+	// A page that drops the claim fails rather than skipping: the guard is
+	// worthless if rewording the sentence silently turns it off.
 	m := countRe.FindStringSubmatch(string(indexData))
 	if m == nil {
-		t.Log("could not find executor count claim in docs/_index.md, skipping doc count check")
+		t.Errorf("README.md no longer states the resource-type count (want a phrase like %q); restore it or move this guard", fmt.Sprintf("%d resource types", codeCount))
 	} else {
 		var docCount int
 		fmt.Sscanf(m[1], "%d", &docCount)
 		if codeCount != docCount {
-			t.Errorf("executor count mismatch: code has %d unique executor types, docs/_index.md claims %d",
+			t.Errorf("executor count mismatch: code has %d unique executor types, README.md claims %d",
 				codeCount, docCount)
 		}
 	}
@@ -854,13 +890,12 @@ func TestExecutorCountConsistent(t *testing.T) {
 	execIndexPath := filepath.Join(root, "docs", "reference", "vigo", "resources", "_index.md")
 	execIndexData, err := os.ReadFile(execIndexPath)
 	if err != nil {
-		t.Logf("could not read docs/reference/vigo/resources/_index.md: %v", err)
-		return
+		t.Fatalf("reading docs/reference/vigo/resources/_index.md: %v", err)
 	}
 
 	em := countRe.FindStringSubmatch(string(execIndexData))
 	if em == nil {
-		t.Log("could not find executor count in docs/reference/vigo/resources/_index.md, skipping")
+		t.Errorf("docs/reference/vigo/resources/_index.md no longer states the resource-type count (want a phrase like %q)", fmt.Sprintf("%d resource types", codeCount))
 	} else {
 		var execDocCount int
 		fmt.Sscanf(em[1], "%d", &execDocCount)

@@ -24,9 +24,15 @@ fi
 
 cd "$REPO_DIR"
 
-# Ensure toolchains are in PATH (sudo strips user PATH).
-export PATH="/usr/local/go/bin:$HOME/.cargo/bin:/home/dan/.cargo/bin:$PATH"
-export GOPATH="${GOPATH:-/home/dan/go}"
+# Ensure toolchains are in PATH (sudo strips user PATH). They belong to the
+# user who ran sudo, so resolve that user's home from passwd.
+BUILD_HOME=""
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    BUILD_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6 || true)"
+fi
+BUILD_HOME="${BUILD_HOME:-$HOME}"
+export PATH="/usr/local/go/bin:$BUILD_HOME/.cargo/bin:$HOME/.cargo/bin:$PATH"
+export GOPATH="${GOPATH:-$BUILD_HOME/go}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

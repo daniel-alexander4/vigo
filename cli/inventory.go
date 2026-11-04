@@ -23,9 +23,9 @@ var inventoryCmd = &cobra.Command{
 	Long: `Query enrolled envoys by their collected traits.
 
 Examples:
-  vigocli inventory --where os.distro=ubuntu
-  vigocli inventory --where os.distro=ubuntu --show network.ip
-  vigocli inventory --where os.family=debian --where virtual.system=kvm --show os.distro,os.version`,
+  vigocli traits inventory --where os.distro=ubuntu
+  vigocli traits inventory --where os.distro=ubuntu --show network.ip
+  vigocli traits inventory --where os.family=debian --where virtual.system=kvm --show os.distro,os.version`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 

@@ -444,7 +444,10 @@ func runSandgorgonCertificate(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("reading response: %w", err)
+		}
 		fmt.Print(string(body))
 		return nil
 	}
@@ -773,7 +776,10 @@ func runSandgorgonReport(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("reading response: %w", err)
+		}
 		fmt.Print(string(body))
 		return nil
 	}
@@ -889,7 +895,10 @@ func runSandgorgonDHCPConfig(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response: %w", err)
+	}
 	fmt.Print(string(body))
 	return nil
 }
