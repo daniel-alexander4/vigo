@@ -215,31 +215,20 @@
       "collapsed": false
     },
     {
-      "title": "Run Duration (p50 / p95)",
-      "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
-      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } } },
-      "targets": [
-        { "expr": "histogram_quantile(0.50, rate(vigo_run_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, rate(vigo_run_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
-      ]
-    },
-    {
       "title": "Drift Corrections / min",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 }, "color": { "fixedColor": "yellow", "mode": "fixed" } } },
-      "targets": [{ "expr": "rate(vigo_drift_detected_total[5m]) * 60", "legendFormat": "Drift corrections" }]
+      "targets": [{ "expr": "sum(rate(vigo_drift_detected_total[5m])) * 60", "legendFormat": "Drift corrections" }]
     },
     {
       "title": "Configcrate Actions",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(vigo_configcrate_actions_total[5m]) * 60", "legendFormat": "{{action}}" }]
+      "targets": [{ "expr": "sum by (action) (rate(vigo_configcrate_actions_total[5m])) * 60", "legendFormat": "{{action}}" }]
     },
     {
       "title": "Operations",

@@ -49,17 +49,6 @@ groups:
           summary: "{{ $value }} envoy(s) past the staleness threshold"
           description: "Envoys haven't checked in within 2.5× their configured/observed cadence. Either host is down, network is partitioned, or the agent crashed."
 
-  - name: vigo-runs
-    rules:
-      - alert: VigoRunDurationP95High
-        expr: histogram_quantile(0.95, sum by (le) (rate(vigo_run_duration_seconds_bucket[5m]))) > 120
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Fleet-wide run p95 duration > 120s for the past 10 minutes"
-          description: "Agents are taking longer than expected to converge. Investigate slow configcrates (long-running exec resources, package operations, network-bound fetches)."
-
   - name: vigo-security
     rules:
       - alert: VigoSigVerifyFailures

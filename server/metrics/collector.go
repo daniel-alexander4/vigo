@@ -90,6 +90,12 @@ type SwarmSource interface {
 	SwarmSnapshot(ctx context.Context) SwarmSnapshot
 }
 
+// ConfigcrateSource lists the loaded configcrate names (config.ConfigStore).
+// May be nil; the drift metric then counts every configcrate as "other".
+type ConfigcrateSource interface {
+	ListConfigcrateNames() []string
+}
+
 // swarmRefreshInterval gates the swarm/spanner gauge refresh. The
 // content-subsystem aggregators rebuild from per-envoy DB traits, and
 // their own 30s cache never helps a poller whose cadence equals the
@@ -103,6 +109,7 @@ type Collector struct {
 	sqlDB            *sql.DB
 	fleetSource      FleetSource
 	swarmSource      SwarmSource
+	configcrates     ConfigcrateSource
 	metrics          *Metrics
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
@@ -117,11 +124,12 @@ type Collector struct {
 // and convergence gauges at zero. The Metrics value is
 // the per-instance collector set; the gauges it owns are the ones this
 // collector mutates each tick.
-func NewCollector(sqlDB *sql.DB, fleetSource FleetSource, swarmSource SwarmSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {
+func NewCollector(sqlDB *sql.DB, fleetSource FleetSource, swarmSource SwarmSource, configcrates ConfigcrateSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {
 	return &Collector{
 		sqlDB:            sqlDB,
 		fleetSource:      fleetSource,
 		swarmSource:      swarmSource,
+		configcrates:     configcrates,
 		metrics:          m,
 		baseInterval:     baseInterval,
 		offlineThreshold: offlineThreshold,
@@ -164,6 +172,11 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		updateActivityMetrics(c.metrics, allEnvoys, time.Now(), c.baseInterval, c.offlineThreshold)
 		updateSecurityMetrics(c.metrics, allEnvoys)
 		updateRiskMetrics(c.metrics, allEnvoys, c.baseInterval, c.offlineThreshold)
+	}
+
+	// Refresh the configcrate set that bounds the drift metric's label.
+	if c.configcrates != nil {
+		c.metrics.SetKnownConfigcrates(c.configcrates.ListConfigcrateNames())
 	}
 
 	// Swarm + spanner gauges. The content-subsystem aggregators rebuild

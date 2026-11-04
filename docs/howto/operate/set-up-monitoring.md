@@ -46,9 +46,8 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `vigo_run_duration_seconds` | Histogram | `envoy` | Duration of agent convergence runs in seconds |
-| `vigo_drift_detected_total` | Counter | `envoy`, `configcrate` | Drift detection events |
-| `vigo_configcrate_actions_total` | Counter | `type`, `action` | Configcrate actions taken (by resource type and action) |
+| `vigo_drift_detected_total` | Counter | `configcrate` | Drift detection events (changed resources). Names not in the loaded config count as `other` |
+| `vigo_configcrate_actions_total` | Counter | `type`, `action` | Resource actions reported, by resource type and action (`settled`, `created`, `updated`, `deleted`, `skipped`, `blocked`). Unknown values count as `other` |
 
 ### Orchestration
 
@@ -216,9 +215,8 @@ scrape_configs:
 
 ### Run Performance
 
-- **P95 run duration**: `histogram_quantile(0.95, rate(vigo_run_duration_seconds_bucket[5m]))`
 - **Failure rate**: `rate(vigo_checkins_total{status="failure"}[5m])`
-- **Drift rate**: `rate(vigo_drift_detected_total[5m])`
+- **Drift rate**: `sum(rate(vigo_drift_detected_total[5m]))`
 
 ### gRPC Latency
 
@@ -348,10 +346,9 @@ For hosts where Vigo isn't managing the monitoring stack, import each dashboard 
 
 | Panel | Type | Metric |
 |-------|------|--------|
-| Run Duration (p50/p95) | Time series | `histogram_quantile` on `vigo_run_duration_seconds` |
 
-| Drift Corrections / min | Time series | `rate(vigo_drift_detected_total[5m]) * 60` |
-| Configcrate Actions | Time series by action | `rate(vigo_configcrate_actions_total[5m]) * 60` |
+| Drift Corrections / min | Time series | `sum(rate(vigo_drift_detected_total[5m])) * 60` |
+| Configcrate Actions | Time series by action | `sum by (action) (rate(vigo_configcrate_actions_total[5m])) * 60` |
 
 ### Row 5 — Operations
 
@@ -477,7 +474,7 @@ Per-envoy convergence status breakdown, compliance trends, and check-in health.
 | Panel | Type | Metric |
 |-------|------|--------|
 | Compliance % | Time series (0-100) | `vigo_convergence_pct * 100` |
-| Drift Rate | Time series | `rate(vigo_drift_detected_total[5m])` |
+| Drift Rate | Time series | `sum(rate(vigo_drift_detected_total[5m]))` |
 
 ### Row 3 — Check-in Health
 

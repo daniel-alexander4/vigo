@@ -79,18 +79,9 @@ func (s *AgentService) ingestRun(ctx context.Context, rep runReport, persistSync
 		})
 	}
 
-	// Metrics. Run duration is the sum of the agent-measured per-resource
-	// durations the report carries (the wire has no run-level duration, and
-	// settled no-ops elided from results contribute nothing).
-	var durationMs int64
-	for _, result := range rep.results {
-		s.metrics.ConfigcrateActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
-		if result.GetChanged() {
-			s.metrics.DriftDetected.WithLabelValues(rep.hostname, result.GetConfigcrateName()).Inc()
-		}
-		durationMs += int64(result.GetDurationMs())
-	}
-	s.metrics.RunDuration.WithLabelValues(rep.hostname).Observe(float64(durationMs) / 1000)
+	// Per-result metrics; label values are bounded inside metrics. No run
+	// duration: the report carries no run start/finish time.
+	s.metrics.RecordRunResults(rep.results)
 
 	// Publish→converge latency: when this envoy first adopts a newer policy
 	// version, observe how long it took from that version becoming current.

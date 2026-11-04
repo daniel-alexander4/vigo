@@ -4,6 +4,8 @@
 package metrics
 
 import (
+	"sync/atomic"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -19,13 +21,16 @@ import (
 // promauto.New* declarations exactly — operators scraping the existing
 // series names see no change.
 type Metrics struct {
+	// knownConfigcrates bounds the configcrate label on DriftDetected to
+	// the loaded config (refreshed by the Collector). See RecordRunResults.
+	knownConfigcrates atomic.Pointer[map[string]struct{}]
+
 	// --- Core ---
 
 	EnvoysTotal          prometheus.Gauge
 	EnvoysActive         prometheus.Gauge
 	CheckinsTotal        *prometheus.CounterVec
 	ReportsTotal         *prometheus.CounterVec
-	RunDuration          *prometheus.HistogramVec
 	DriftDetected        *prometheus.CounterVec
 	ConfigcrateActions   *prometheus.CounterVec
 	ConvergencePct       prometheus.Gauge
@@ -218,18 +223,13 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_reportresults_total",
 			Help: "Total number of agent result reports, by status (e.g. shed).",
 		}, []string{"status"}),
-		RunDuration: f.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "vigo_run_duration_seconds",
-			Help:    "Duration of agent runs in seconds.",
-			Buckets: prometheus.DefBuckets,
-		}, []string{"envoy"}),
 		DriftDetected: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_drift_detected_total",
-			Help: "Total number of drift detection events.",
-		}, []string{"envoy", "configcrate"}),
+			Help: "Total number of drift detection events (changed resources), by configcrate. Names not in the loaded config are counted as \"other\".",
+		}, []string{"configcrate"}),
 		ConfigcrateActions: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_configcrate_actions_total",
-			Help: "Total number of configcrate actions taken.",
+			Help: "Total number of resource actions reported, by resource type and action. Unknown types and actions are counted as \"other\".",
 		}, []string{"type", "action"}),
 		ConvergencePct: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_convergence_pct",

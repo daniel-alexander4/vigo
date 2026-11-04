@@ -161,7 +161,7 @@
           "color": { "fixedColor": "yellow", "mode": "fixed" }
         }
       },
-      "targets": [{ "expr": "rate(vigo_drift_detected_total[5m])", "legendFormat": "Drift Rate" }]
+      "targets": [{ "expr": "sum(rate(vigo_drift_detected_total[5m]))", "legendFormat": "Drift Rate" }]
     },
     {
       "title": "Check-in Health",

@@ -46,7 +46,7 @@ func testFleet(now time.Time) *fakeFleet {
 // UpdateGauges concurrently to verify no data races on the metric writes.
 func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 	m := NewTestMetrics()
-	c := NewCollector(nil, testFleet(time.Now()), nil, m, time.Minute, 0)
+	c := NewCollector(nil, testFleet(time.Now()), nil, nil, m, time.Minute, 0)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -68,7 +68,7 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 // convergence.ConvergedPct over (Total - Offline).
 func TestCollector_UpdateGaugesFromFleetIndex(t *testing.T) {
 	m := NewTestMetrics()
-	c := NewCollector(nil, testFleet(time.Now()), nil, m, time.Minute, 0)
+	c := NewCollector(nil, testFleet(time.Now()), nil, nil, m, time.Minute, 0)
 	if err := c.UpdateGauges(context.Background()); err != nil {
 		t.Fatalf("UpdateGauges: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestCollector_UpdateGaugesFromFleetIndex(t *testing.T) {
 func TestCollector_CheckinAgeIsSnapshot(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	m := NewMetrics(reg)
-	c := NewCollector(nil, testFleet(time.Now()), nil, m, time.Minute, 0)
+	c := NewCollector(nil, testFleet(time.Now()), nil, nil, m, time.Minute, 0)
 	for i := 0; i < 2; i++ {
 		if err := c.UpdateGauges(context.Background()); err != nil {
 			t.Fatalf("UpdateGauges: %v", err)

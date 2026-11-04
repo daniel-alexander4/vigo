@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:6a69d5fc613733698ee7116c6a07647eee3c19633ecb7643f2091e37161c58ff -->
+<!-- vigo-i18n source_sha:d2e270c58b5888424edb946b208113b5e01a39cd4ce2b1044fb5fad237ae96d8 -->
 
 # Mettre en place la supervision
 
@@ -47,9 +47,8 @@ Couvre tous les RPC unaires (CheckIn, ReportResult, ReportTraits, Register). Les
 
 | Métrique | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `vigo_run_duration_seconds` | Histogram | `envoy` | Durée des exécutions de convergence de l'agent en secondes |
-| `vigo_drift_detected_total` | Counter | `envoy`, `configcrate` | Événements de détection de dérive |
-| `vigo_configcrate_actions_total` | Counter | `type`, `action` | Actions de configcrate effectuées (par type de ressource et action) |
+| `vigo_drift_detected_total` | Counter | `configcrate` | Événements de détection de dérive (ressources modifiées). Les noms absents de la configuration chargée comptent comme `other` |
+| `vigo_configcrate_actions_total` | Counter | `type`, `action` | Actions de ressource rapportées, par type de ressource et action (`settled`, `created`, `updated`, `deleted`, `skipped`, `blocked`). Les valeurs inconnues comptent comme `other` |
 
 ### Orchestration
 
@@ -217,9 +216,8 @@ scrape_configs:
 
 ### Performance des exécutions
 
-- **Durée d'exécution P95** : `histogram_quantile(0.95, rate(vigo_run_duration_seconds_bucket[5m]))`
 - **Taux d'échec** : `rate(vigo_checkins_total{status="failure"}[5m])`
-- **Taux de dérive** : `rate(vigo_drift_detected_total[5m])`
+- **Taux de dérive** : `sum(rate(vigo_drift_detected_total[5m]))`
 
 ### Latence gRPC
 
@@ -349,10 +347,9 @@ Pour les hôtes où Vigo ne gère pas la pile de supervision, importez chaque ta
 
 | Panneau | Type | Métrique |
 |-------|------|--------|
-| Run Duration (p50/p95) | Série temporelle | `histogram_quantile` sur `vigo_run_duration_seconds` |
 
-| Drift Corrections / min | Série temporelle | `rate(vigo_drift_detected_total[5m]) * 60` |
-| Configcrate Actions | Série temporelle par action | `rate(vigo_configcrate_actions_total[5m]) * 60` |
+| Drift Corrections / min | Série temporelle | `sum(rate(vigo_drift_detected_total[5m])) * 60` |
+| Configcrate Actions | Série temporelle par action | `sum by (action) (rate(vigo_configcrate_actions_total[5m])) * 60` |
 
 ### Ligne 5 — Opérations
 
@@ -478,7 +475,7 @@ Répartition du statut de convergence par Envoy, tendances de conformité et san
 | Panneau | Type | Métrique |
 |-------|------|--------|
 | Compliance % | Série temporelle (0-100) | `vigo_convergence_pct * 100` |
-| Drift Rate | Série temporelle | `rate(vigo_drift_detected_total[5m])` |
+| Drift Rate | Série temporelle | `sum(rate(vigo_drift_detected_total[5m]))` |
 
 ### Ligne 3 — Santé des check-ins
 
