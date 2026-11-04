@@ -328,12 +328,22 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Try recovery code.
-	recoveryJSON, _ := p.userStore.GetRecoveryCodes(r.Context(), userID)
-	if valid, updatedJSON := ValidateRecoveryCode(code, recoveryJSON); valid {
-		// Update recovery codes (remove used one).
-		if err := p.userStore.UpdateRecoveryCodes(r.Context(), userID, updatedJSON); err != nil {
-			slog.Error("failed to invalidate used recovery code", "user", username, "error", err)
+	// Try recovery code. Like the TOTP step above, a code is accepted only
+	// if this request is the one that removes it: the consume is a
+	// compare-and-swap against the set the code was validated in, so a
+	// concurrent replay loses, and a failed write fails closed.
+	recoveryJSON, err := p.userStore.GetRecoveryCodes(r.Context(), userID)
+	if err != nil {
+		slog.Error("reading recovery codes failed", "user", username, "error", err)
+	} else if valid, updatedJSON := ValidateRecoveryCode(code, recoveryJSON); valid {
+		consumed, err := p.userStore.ConsumeRecoveryCode(r.Context(), userID, recoveryJSON, updatedJSON)
+		if err != nil {
+			slog.Error("failed to consume recovery code", "user", username, "error", err)
+		}
+		if err != nil || !consumed {
+			recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "recovery code not consumed", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+			serveTOTPPage(w, locale, "auth.err.invalid_code")
+			return
 		}
 		p.sessions.Remove(r.Context(), "totp_pending_user_id")
 		p.sessions.Remove(r.Context(), "totp_pending_username")

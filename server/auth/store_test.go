@@ -244,7 +244,7 @@ func TestUserStore_Create_WithoutSigner_LeavesEmpty(t *testing.T) {
 
 // TestUserStore_TOTPMutationsDoNotBumpUpdatedAtMs pins direction call
 // A (Dan, 2026-05-24): TOTP doesn't replicate. EnableTOTP, DisableTOTP,
-// and UpdateRecoveryCodes must not touch updated_at_ms — a local TOTP
+// and ConsumeRecoveryCode must not touch updated_at_ms — a local TOTP
 // enrollment cannot trigger empty CRDT churn on peers.
 func TestUserStore_TOTPMutationsDoNotBumpUpdatedAtMs(t *testing.T) {
 	queries := setupTestDB(t)
@@ -266,10 +266,12 @@ func TestUserStore_TOTPMutationsDoNotBumpUpdatedAtMs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, preMs, afterEnable.UpdatedAtMs, "EnableTOTP must NOT bump updated_at_ms")
 
-	require.NoError(t, store.UpdateRecoveryCodes(ctx, u.ID, `["recovery-code-2"]`))
+	consumed, err := store.ConsumeRecoveryCode(ctx, u.ID, `["recovery-code-1"]`, `["recovery-code-2"]`)
+	require.NoError(t, err)
+	require.True(t, consumed)
 	afterUpdate, err := queries.GetUserByID(ctx, u.ID)
 	require.NoError(t, err)
-	assert.Equal(t, preMs, afterUpdate.UpdatedAtMs, "UpdateRecoveryCodes must NOT bump updated_at_ms")
+	assert.Equal(t, preMs, afterUpdate.UpdatedAtMs, "ConsumeRecoveryCode must NOT bump updated_at_ms")
 
 	require.NoError(t, store.DisableTOTP(ctx, u.ID))
 	afterDisable, err := queries.GetUserByID(ctx, u.ID)

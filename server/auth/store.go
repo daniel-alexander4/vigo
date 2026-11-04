@@ -309,13 +309,23 @@ func (s *UserStore) GetRecoveryCodes(ctx context.Context, id string) (string, er
 	return u.TotpRecovery, nil
 }
 
-// UpdateRecoveryCodes updates the recovery codes JSON. Bolt-local; no
-// CRDT bump (ADR-030 direction call A — TOTP fields don't replicate).
-func (s *UserStore) UpdateRecoveryCodes(ctx context.Context, id, recoveryJSON string) error {
-	return s.queries.UpdateTOTPRecovery(ctx, db.UpdateTOTPRecoveryParams{
-		TotpRecovery: recoveryJSON,
-		ID:           id,
+// ConsumeRecoveryCode atomically replaces the recovery-code JSON `prev`
+// (the set a code was validated against) with `next` (that set minus the
+// used code). Returns (true, nil) only if this call made the swap; a false
+// means another request consumed a code first and the caller must reject,
+// which is what stops two concurrent replays of one code from both
+// logging in. Bolt-local; no CRDT bump (ADR-030 direction call A — TOTP
+// fields don't replicate).
+func (s *UserStore) ConsumeRecoveryCode(ctx context.Context, id, prev, next string) (bool, error) {
+	rows, err := s.queries.ConsumeTOTPRecovery(ctx, db.ConsumeTOTPRecoveryParams{
+		TotpRecovery:   next,
+		ID:             id,
+		TotpRecovery_2: prev,
 	})
+	if err != nil {
+		return false, err
+	}
+	return rows == 1, nil
 }
 
 // ResignLegacyRows stamps origin_bolt + signature on every live user

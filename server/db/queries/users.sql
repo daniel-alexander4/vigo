@@ -70,10 +70,15 @@ WHERE id = ?;
 UPDATE users SET totp_enabled = 0, totp_recovery = '', totp_last_consumed_step = 0
 WHERE id = ?;
 
--- name: UpdateTOTPRecovery :exec
+-- name: ConsumeTOTPRecovery :execrows
+-- Atomic recovery-code consume: swap the recovery JSON to its successor
+-- (?1, the set minus the used code) only if it still equals the set the
+-- code was validated against (?3). A rows-affected of 0 means another
+-- request consumed a code first (or the set changed) -> reject, so two
+-- concurrent replays of one code cannot both succeed.
 -- See EnableTOTP -- TOTP is bolt-local; no CRDT comparator bump.
-UPDATE users SET totp_recovery = ?
-WHERE id = ?;
+UPDATE users SET totp_recovery = ?1
+WHERE id = ?2 AND totp_recovery = ?3 AND deleted_at IS NULL;
 
 -- name: ConsumeTOTPStep :execrows
 -- Atomic TOTP replay guard: advance the last-consumed step only if the

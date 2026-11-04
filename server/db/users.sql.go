@@ -10,6 +10,31 @@ import (
 	"database/sql"
 )
 
+const consumeTOTPRecovery = `-- name: ConsumeTOTPRecovery :execrows
+UPDATE users SET totp_recovery = ?1
+WHERE id = ?2 AND totp_recovery = ?3 AND deleted_at IS NULL
+`
+
+type ConsumeTOTPRecoveryParams struct {
+	TotpRecovery   string `json:"totp_recovery"`
+	ID             string `json:"id"`
+	TotpRecovery_2 string `json:"totp_recovery_2"`
+}
+
+// Atomic recovery-code consume: swap the recovery JSON to its successor
+// (?1, the set minus the used code) only if it still equals the set the
+// code was validated against (?3). A rows-affected of 0 means another
+// request consumed a code first (or the set changed) -> reject, so two
+// concurrent replays of one code cannot both succeed.
+// See EnableTOTP -- TOTP is bolt-local; no CRDT comparator bump.
+func (q *Queries) ConsumeTOTPRecovery(ctx context.Context, arg ConsumeTOTPRecoveryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, consumeTOTPRecovery, arg.TotpRecovery, arg.ID, arg.TotpRecovery_2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const consumeTOTPStep = `-- name: ConsumeTOTPStep :execrows
 UPDATE users SET totp_last_consumed_step = ?1
 WHERE id = ?2 AND totp_last_consumed_step < ?1 AND deleted_at IS NULL
@@ -464,22 +489,6 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) 
 		arg.Signature,
 		arg.ID,
 	)
-	return err
-}
-
-const updateTOTPRecovery = `-- name: UpdateTOTPRecovery :exec
-UPDATE users SET totp_recovery = ?
-WHERE id = ?
-`
-
-type UpdateTOTPRecoveryParams struct {
-	TotpRecovery string `json:"totp_recovery"`
-	ID           string `json:"id"`
-}
-
-// See EnableTOTP -- TOTP is bolt-local; no CRDT comparator bump.
-func (q *Queries) UpdateTOTPRecovery(ctx context.Context, arg UpdateTOTPRecoveryParams) error {
-	_, err := q.db.ExecContext(ctx, updateTOTPRecovery, arg.TotpRecovery, arg.ID)
 	return err
 }
 
