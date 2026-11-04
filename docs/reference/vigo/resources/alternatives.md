@@ -7,7 +7,7 @@ Manages Debian/Ubuntu `update-alternatives` entries. Installs and sets the activ
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `name` | Yes | -- | Alternatives name (e.g., `editor`, `java`). |
+| `name` | Yes | -- | Alternatives name (e.g., `editor`, `java`). Set by the resource's own `name:`; a second `name:` key in the same resource is a duplicate-key error. |
 | `path` | Yes | -- | Path to the actual binary (e.g., `/usr/bin/vim`). |
 | `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `link` | No | `/usr/bin/<name>` | Symlink location. Defaults to `/usr/bin/<name>`. |
@@ -28,9 +28,8 @@ Queries the current alternative value using `update-alternatives --query`. If th
 
 ```yaml
 resources:
-  - name: Set editor to vim
+  - name: editor
     type: alternatives
-    name: editor
     path: /usr/bin/vim
     priority: "100"
 ```
@@ -39,9 +38,8 @@ resources:
 
 ```yaml
 resources:
-  - name: Set java to openjdk-17
+  - name: java
     type: alternatives
-    name: java
     path: /usr/lib/jvm/java-17-openjdk-amd64/bin/java
     link: /usr/bin/java
     priority: "200"
@@ -51,9 +49,8 @@ resources:
 
 ```yaml
 resources:
-  - name: Remove nano as editor
+  - name: editor
     type: alternatives
-    name: editor
     path: /usr/bin/nano
     state: absent
 ```

@@ -43,8 +43,10 @@ func TestConfigcrateRetiredComplianceShapeRejected(t *testing.T) {
 	}
 }
 
-// TestShippedConfigcratesParse: every live (.vgo) configcrate and usercrate
-// shipped in the repo parses under the strict decoder.
+// TestShippedConfigcratesParse: every configcrate and usercrate shipped in the
+// repo, live (.vgo) and install template (.vgo.example), parses under the
+// strict decoder the loader uses. An operator copies a .vgo.example to .vgo,
+// so a template that fails here fails on their first publish.
 func TestShippedConfigcratesParse(t *testing.T) {
 	roots := []string{"../../example-configs", "../../server-seed", "../../gcloud/demo-stacks"}
 	n := 0
@@ -56,7 +58,7 @@ func TestShippedConfigcratesParse(t *testing.T) {
 			if !strings.Contains(p, "/configcrates/") && !strings.Contains(p, "/usercrates/") {
 				return nil
 			}
-			if !strings.HasSuffix(p, ".vgo") {
+			if !strings.HasSuffix(p, ".vgo") && !strings.HasSuffix(p, ".vgo.example") {
 				return nil
 			}
 			data, err := os.ReadFile(p)

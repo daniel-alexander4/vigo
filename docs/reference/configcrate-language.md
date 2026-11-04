@@ -1276,6 +1276,8 @@ Templates are rendered in **all string attributes** on every resource. This incl
 # All of these support {{ .Traits.* }} and {{ .Vars.* }}
 - name: docker-repo
   type: repository
+  repository: docker
+  state: present
   key_url: "https://download.docker.com/linux/{{ .Traits.os.upstream_id }}/gpg"
   repo: "deb https://download.docker.com/linux/{{ .Traits.os.upstream_id }} {{ .Traits.os.upstream_codename }} stable"
 

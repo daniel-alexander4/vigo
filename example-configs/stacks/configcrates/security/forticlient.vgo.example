@@ -38,8 +38,7 @@ resources:
     #~ on_revert: ""  # no safe automatic inverse — supply manually
     command: apt-get update -qq
     onlyif: "test -f /etc/apt/sources.list.d/fortinet.list"
-    when: "changed"
-    when: "os_family('debian')"
+    when: "changed && os_family('debian')"
 
   # Fortinet repo — RHEL/CentOS/Fedora
   - name: fortinet-yum-repo

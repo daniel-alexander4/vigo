@@ -57,11 +57,10 @@ resources:
     depends_on: [borgmatic-config]
     when: "os_family('linux')"
 
-  - name: borg-cron
+  - name: borgmatic-scheduled
     type: cron
     state: present
     user: root
-    name: borgmatic-scheduled
     command: "borgmatic --syslog-verbosity 1"
     schedule: "{{ .Vars.schedule }}"
     depends_on: [borg-init]

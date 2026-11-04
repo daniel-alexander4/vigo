@@ -22,11 +22,10 @@ resources:
     depends_on: [install-aide]
     when: "os_family('linux')"
 
-  - name: aide-cron
+  - name: aide-check
     type: cron
     state: present
     user: root
-    name: aide-check
     command: "aide --check"
     schedule: "30 5 * * *"
     depends_on: [aide-init]

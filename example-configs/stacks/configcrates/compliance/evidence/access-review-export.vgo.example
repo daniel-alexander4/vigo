@@ -40,11 +40,10 @@ resources:
     depends_on: [evidence-dir]
     when: "os_family('linux')"
 
-  - name: access-export-cron
+  - name: access-review-export
     type: cron
     state: present
     user: root
-    name: access-review-export
     command: "/usr/local/sbin/access-review-export.sh"
     schedule: "0 2 * * 0"
     depends_on: [access-export-script]

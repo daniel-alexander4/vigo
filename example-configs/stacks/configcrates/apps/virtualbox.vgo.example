@@ -18,6 +18,7 @@ resources:
 
   - name: virtualbox-repo-debian
     type: repository
+    repository: virtualbox
     repo: "deb [arch={{ .Traits.os.arch }} signed-by=/etc/apt/keyrings/oracle-virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian {{ .Traits.os.codename }} contrib"
     state: present
     depends_on: [virtualbox-repo-key-debian]
@@ -42,7 +43,7 @@ resources:
   - name: virtualbox-repo-rhel
     type: repository
     repo: "https://download.virtualbox.org/virtualbox/rpm/el/$releasever/$basearch"
-    name: virtualbox
+    repository: virtualbox
     key_url: "https://www.virtualbox.org/download/oracle_vbox_2016.asc"
     state: present
     when: "has_display() and os_family('redhat')"

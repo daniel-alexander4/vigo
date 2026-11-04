@@ -41,11 +41,10 @@ resources:
     depends_on: [evidence-dir]
     when: "os_family('linux')"
 
-  - name: backup-verify-cron
+  - name: backup-verify
     type: cron
     state: present
     user: root
-    name: backup-verify
     command: "/usr/local/sbin/backup-verify.sh"
     schedule: "0 3 * * 0"
     depends_on: [backup-verify-script]

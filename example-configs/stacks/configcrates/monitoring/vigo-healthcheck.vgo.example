@@ -71,11 +71,10 @@ resources:
       fi
     when: "os_family('linux')"
 
-  - name: healthcheck-cron
+  - name: vigo-healthcheck
     type: cron
     state: present
     user: root
-    name: vigo-healthcheck
     command: "/usr/local/sbin/vigo-healthcheck.sh"
     schedule: "* * * * *"
     depends_on: [install-curl, healthcheck-script]

@@ -25,11 +25,10 @@ resources:
     onlyif: "! useradd -D | grep -q 'INACTIVE=30'"
 
   # AC-3: Enforce permission bits on sensitive dirs — daily cron.
-  - name: home-dir-permissions
+  - name: nist-home-dir-permissions
     type: cron
     state: present
     user: root
-    name: nist-home-dir-permissions
     command: "find /home -maxdepth 1 -mindepth 1 -type d -perm /g+w,o+rwx -exec chmod 750 {} +"
     schedule: "15 2 * * *"
 

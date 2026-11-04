@@ -36,11 +36,10 @@ resources:
     depends_on: [evidence-dir]
     when: "os_family('linux')"
 
-  - name: encryption-attest-cron
+  - name: encryption-attest
     type: cron
     state: present
     user: root
-    name: encryption-attest
     command: "/usr/local/sbin/encryption-attest.sh"
     schedule: "30 1 * * 0"
     depends_on: [encryption-attest-script]

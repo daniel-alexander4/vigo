@@ -10,7 +10,7 @@ SSH connection parameters are auto-injected by the gateway proxy.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `vlan_id` | Yes | -- | VLAN number (1-4094) |
-| `name` | Yes | -- | VLAN name |
+| `name` | Yes | -- | VLAN name. Set by the resource's own `name:`; a second `name:` key in the same resource is a duplicate-key error. |
 | `state` | Yes | -- | `present` to create/update, `absent` to remove |
 | `host` | Auto | -- | Target IP/hostname (auto-injected) |
 | `port` | Auto | `22` | SSH port (auto-injected) |
@@ -30,10 +30,9 @@ SSH connection parameters are auto-injected by the gateway proxy.
 
 ```yaml
 resources:
-  - name: mgmt-vlan
+  - name: Management
     type: cisco_vlan
     vlan_id: "100"
-    name: Management
     state: present
 ```
 
@@ -41,10 +40,9 @@ resources:
 
 ```yaml
 resources:
-  - name: remove-old-vlan
+  - name: Deprecated
     type: cisco_vlan
     vlan_id: "999"
-    name: Deprecated
     state: absent
 ```
 

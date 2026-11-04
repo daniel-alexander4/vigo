@@ -7,7 +7,7 @@ Manages cron jobs by writing configuration files to `/etc/cron.d/`.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `name` | Yes | -- | Cron job name (used as the filename in `/etc/cron.d/`). |
+| `name` | Yes | -- | Cron job name (used as the filename in `/etc/cron.d/`). Set by the resource's own `name:`; a second `name:` key in the same resource is a duplicate-key error. |
 | `command` | Yes (for present) | -- | The command to execute. |
 | `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `schedule` | No | -- | Cron schedule expression (e.g., `*/5 * * * *`) or special schedule (`@daily`, `@hourly`, `@reboot`, etc.). Takes precedence over individual time fields. |
@@ -36,7 +36,6 @@ Reads the existing cron file in `/etc/cron.d/` and compares its content against 
 resources:
   - name: cleanup-tmp
     type: cron
-    name: cleanup-tmp
     command: "find /tmp -type f -mtime +7 -delete"
     schedule: "0 2 * * *"
 ```
@@ -47,7 +46,6 @@ resources:
 resources:
   - name: backup
     type: cron
-    name: backup
     command: "/opt/backup.sh"
     minute: "0"
     hour: "3"
@@ -60,7 +58,6 @@ resources:
 resources:
   - name: health-check
     type: cron
-    name: health-check
     command: "/opt/check-health.sh"
     schedule: "*/5 * * * *"
 ```
@@ -71,7 +68,6 @@ resources:
 resources:
   - name: mount-data
     type: cron
-    name: mount-data
     command: "/opt/mount-data.sh"
     schedule: "@reboot"
 ```
@@ -82,7 +78,6 @@ resources:
 resources:
   - name: etl-job
     type: cron
-    name: etl-job
     command: "/opt/run-etl.sh"
     schedule: "0 4 * * *"
     environment: "RAILS_ENV=production,PATH=/usr/local/bin:/usr/bin"
@@ -94,7 +89,6 @@ resources:
 resources:
   - name: old-job
     type: cron
-    name: old-job
     state: absent
 ```
 

@@ -3,11 +3,10 @@ compliance:
   bundle: [nist-key-management]
 resources:
   # SSH key permissions — daily cron.
-  - name: ssh-key-permissions
+  - name: nist-ssh-key-permissions
     type: cron
     state: present
     user: root
-    name: nist-ssh-key-permissions
     command: "find /home -name 'authorized_keys' -exec chmod 600 {} \\; && find /home -name '.ssh' -exec chmod 700 {} \\;"
     schedule: "20 2 * * *"
 

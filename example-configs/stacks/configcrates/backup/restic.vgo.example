@@ -91,11 +91,10 @@ resources:
         --prune --quiet
     when: "os_family('linux')"
 
-  - name: restic-cron
+  - name: restic-scheduled
     type: cron
     state: present
     user: root
-    name: restic-scheduled
     command: "/usr/local/sbin/restic-backup.sh"
     schedule: "{{ .Vars.schedule }}"
     depends_on: [restic-init, restic-backup-script]

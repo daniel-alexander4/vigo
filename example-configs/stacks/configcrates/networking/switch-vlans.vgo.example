@@ -4,28 +4,24 @@ name: switch-vlans
 compliance:
   provides: [network-segmentation]
 resources:
-  - name: mgmt-vlan
+  - name: Management
     type: cisco_vlan
     vlan_id: "100"
-    name: Management
     state: present
 
-  - name: server-vlan
+  - name: Servers
     type: cisco_vlan
     vlan_id: "200"
-    name: Servers
     state: present
 
-  - name: user-vlan
+  - name: Users
     type: cisco_vlan
     vlan_id: "300"
-    name: Users
     state: present
 
-  - name: remove-vlan-999
+  - name: Deprecated
     type: cisco_vlan
     vlan_id: "999"
-    name: Deprecated
     state: absent
 
   - name: trunk-to-router
@@ -33,7 +29,7 @@ resources:
     interface: GigabitEthernet0/1
     description: "Uplink to edge-rtr01"
     switchport_mode: trunk
-    depends_on: [mgmt-vlan, server-vlan, user-vlan]
+    depends_on: [Management, Servers, Users]
 
   - name: server-port
     type: cisco_interface
@@ -41,4 +37,4 @@ resources:
     description: "Database Server"
     switchport_mode: access
     access_vlan: "200"
-    depends_on: [server-vlan]
+    depends_on: [Servers]

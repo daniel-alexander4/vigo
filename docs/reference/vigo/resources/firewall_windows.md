@@ -7,7 +7,7 @@ Manages Windows Firewall rules via `netsh advfirewall firewall`.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `name` | No | -- | Rule name. If omitted, a name is generated from port/protocol/direction. |
+| `name` | Yes | -- | Rule name. Set by the resource's own `name:`; a second `name:` key in the same resource is a duplicate-key error. |
 | `port` | No | -- | Port number. At least one of `name` or `port` is required. |
 | `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `protocol` | No | `tcp` | Protocol: `tcp` or `udp`. |
@@ -29,9 +29,8 @@ Uses `netsh advfirewall firewall show rule name=<name>` to check if the rule exi
 
 ```yaml
 resources:
-  - name: Allow HTTPS
+  - name: Allow-HTTPS
     type: firewall
-    name: Allow-HTTPS
     port: "443"
     protocol: tcp
     action: allow
@@ -53,9 +52,8 @@ resources:
 
 ```yaml
 resources:
-  - name: Remove old rule
+  - name: Old-App-Rule
     type: firewall
-    name: Old-App-Rule
     state: absent
 ```
 

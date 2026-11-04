@@ -62,10 +62,9 @@ resources:
     user: root
 
   # Art 32(1)(b): Ensure ongoing confidentiality — restrict access to logs. Daily cron.
-  - name: secure-log-permissions
+  - name: gdpr-log-permissions
     type: cron
     state: present
     user: root
-    name: gdpr-log-permissions
     command: "chmod -R o-rwx /var/log/"
     schedule: "45 2 * * *"

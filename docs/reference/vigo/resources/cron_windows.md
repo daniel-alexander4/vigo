@@ -7,7 +7,7 @@ Manages Windows scheduled tasks via `schtasks.exe`. Translates cron-style schedu
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `name` | Yes | -- | Scheduled task name. |
+| `name` | Yes | -- | Scheduled task name. Set by the resource's own `name:`; a second `name:` key in the same resource is a duplicate-key error. |
 | `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `command` | Yes (for present) | -- | Command to execute. |
 | `schedule` | No | `* * * * *` | Cron-style schedule expression or shortcut (`@hourly`, `@daily`, `@weekly`, `@monthly`, `@reboot`). |
@@ -47,7 +47,6 @@ Checks if the task exists via `schtasks /Query /TN <name>`. For `state: present`
 resources:
   - name: daily-backup
     type: cron
-    name: daily-backup
     command: "C:\\Scripts\\backup.bat"
     schedule: "@daily"
 ```
@@ -58,7 +57,6 @@ resources:
 resources:
   - name: health-check
     type: cron
-    name: health-check
     command: "C:\\Scripts\\health-check.ps1"
     schedule: "*/15 * * * *"
 ```
@@ -69,7 +67,6 @@ resources:
 resources:
   - name: weekly-cleanup
     type: cron
-    name: weekly-cleanup
     command: "C:\\Scripts\\cleanup.bat"
     schedule: "0 3 * * 1"
     user: SYSTEM
@@ -81,7 +78,6 @@ resources:
 resources:
   - name: old-task
     type: cron
-    name: old-task
     state: absent
 ```
 

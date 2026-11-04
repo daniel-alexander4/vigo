@@ -62,11 +62,10 @@ resources:
     depends_on: [install-kopia, kopia-env, kopia-init-script]
     when: "os_family('linux')"
 
-  - name: kopia-cron
+  - name: kopia-scheduled
     type: cron
     state: present
     user: root
-    name: kopia-scheduled
     command: ". /etc/kopia/kopia.env && export KOPIA_PASSWORD KOPIA_CONFIG_PATH && kopia snapshot create {{ .Vars.source_paths }}"
     schedule: "{{ .Vars.schedule }}"
     depends_on: [kopia-init]

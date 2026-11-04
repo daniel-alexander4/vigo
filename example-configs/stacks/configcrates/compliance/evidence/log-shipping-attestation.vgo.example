@@ -45,11 +45,10 @@ resources:
     depends_on: [evidence-dir]
     when: "os_family('linux')"
 
-  - name: attestation-cron
+  - name: log-shipping-attest
     type: cron
     state: present
     user: root
-    name: log-shipping-attest
     command: "/usr/local/sbin/log-ship-attest.sh"
     schedule: "0 1 * * *"
     depends_on: [attestation-script]

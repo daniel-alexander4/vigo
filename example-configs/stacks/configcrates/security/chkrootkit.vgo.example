@@ -12,11 +12,10 @@ resources:
     state: present
     when: "os_family('linux')"
 
-  - name: chkrootkit-cron
+  - name: chkrootkit-check
     type: cron
     state: present
     user: root
-    name: chkrootkit-check
     command: "chkrootkit -q"
     schedule: "30 4 * * *"
     depends_on: [install-chkrootkit]

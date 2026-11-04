@@ -73,11 +73,10 @@ resources:
     onlyif: "test -f /etc/gshadow- && ! stat -c '%a' /etc/gshadow- | grep -q '640'"
 
   # CIS 6.1.10: No world-writable files — daily cron (expensive full-disk scan).
-  - name: 6.1.10-no-world-writable
+  - name: cis-world-writable-scan
     type: cron
     state: present
     user: root
-    name: cis-world-writable-scan
     command: "find / -xdev -type f -perm -0002 -exec chmod o-w {} + 2>/dev/null"
     schedule: "0 3 * * *"
 

@@ -7,7 +7,7 @@ Manages systemd-tmpfiles configuration files in `/etc/tmpfiles.d/`. Used to decl
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `name` | Yes | -- | Configuration name (used as the filename: `/etc/tmpfiles.d/<name>.conf`). |
+| `name` | Yes | -- | Configuration name (used as the filename: `/etc/tmpfiles.d/<name>.conf`). Set by the resource's own `name:`; a second `name:` key in the same resource is a duplicate-key error. |
 | `state` | Yes | -- | Desired state: `present` or `absent`. |
 | `path` | Yes (for present) | -- | Filesystem path managed by this tmpfile rule. |
 | `entry_type` | No | `d` | tmpfiles.d entry type: `d` (directory), `f` (file), `D` (directory with cleanup), etc. |
@@ -33,7 +33,6 @@ Computes the SHA-256 hash of the desired configuration content and compares it a
 resources:
   - name: myapp-runtime
     type: tmpfile
-    name: myapp-runtime
     path: /run/myapp
     entry_type: d
     mode: "0755"
@@ -47,7 +46,6 @@ resources:
 resources:
   - name: myapp-cache
     type: tmpfile
-    name: myapp-cache
     path: /tmp/myapp-cache
     entry_type: D
     mode: "0755"
@@ -60,7 +58,6 @@ resources:
 resources:
   - name: old-tmpfile
     type: tmpfile
-    name: old-tmpfile
     state: absent
 ```
 

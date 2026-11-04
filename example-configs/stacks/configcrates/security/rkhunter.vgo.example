@@ -10,11 +10,10 @@ resources:
     state: present
     when: "os_family('linux')"
 
-  - name: rkhunter-cron
+  - name: rkhunter-check
     type: cron
     state: present
     user: root
-    name: rkhunter-check
     command: "rkhunter --update --quiet && rkhunter --check --skip-keypress --quiet"
     schedule: "0 4 * * *"
     depends_on: [install-rkhunter]

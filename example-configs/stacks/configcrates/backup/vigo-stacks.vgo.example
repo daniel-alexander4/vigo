@@ -76,11 +76,10 @@ resources:
       git push origin {{ .Vars.push_branch }}
     when: "os_family('linux')"
 
-  - name: push-cron
+  - name: vigo-stacks-push
     type: cron
     state: present
     user: root
-    name: vigo-stacks-push
     command: "/usr/local/sbin/vigo-stacks-push.sh"
     schedule: "{{ .Vars.push_schedule_minute }} {{ .Vars.push_schedule_hour }} * * *"
     depends_on: [init-stacks-repo, push-script]
