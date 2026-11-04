@@ -670,9 +670,18 @@ if $DO_FULL; then
     if $PUSH; then
         echo "Pushing image to $REGISTRY_IMAGE..."
         push_version="$(tr -d '[:space:]' < "$REPO_DIR/VERSION")"
+        # Registry credentials (docker's credential helper, the gcloud login)
+        # belong to the user who ran sudo; root has none, so a push as root
+        # is anonymous and the registry refuses it. Push as that user, with
+        # the usual gcloud SDK locations on PATH for the credential helper.
+        push_cmd=(docker push)
+        if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+            push_path="$BUILD_HOME/google-cloud-sdk/bin:/usr/lib/google-cloud-sdk/bin:/snap/bin:$PATH"
+            push_cmd=(sudo -u "$SUDO_USER" -H env "PATH=$push_path" docker push)
+        fi
         for tag in latest "$push_version"; do
             docker tag "$IMAGE" "$REGISTRY_IMAGE:$tag"
-            docker push "$REGISTRY_IMAGE:$tag"
+            "${push_cmd[@]}" "$REGISTRY_IMAGE:$tag"
         done
         echo "Pushed $REGISTRY_IMAGE:latest and :$push_version"
     fi
