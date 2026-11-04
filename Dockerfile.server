@@ -128,8 +128,11 @@ RUN chmod 0700 /usr/local/bin/vigocli
 # top so it always wins over any stale copy in dist/.
 # Bootstrap serves /api/v1/agent/download/{os}/{arch}. Missing binaries return 404.
 # Build additional platforms with: make dist-agent dist-agent-macos dist-agent-freebsd etc.
-RUN mkdir -p /dist/agent/linux/amd64
-COPY dist/agent/ /dist/agent/
+# A fresh clone has no dist/agent/ (dist/ is gitignored), so the host-built
+# set is optional: copy it when present rather than failing the build.
+RUN --mount=type=bind,source=.,target=/ctx \
+    mkdir -p /dist/agent/linux/amd64 && \
+    if [ -d /ctx/dist/agent ]; then cp -a /ctx/dist/agent/. /dist/agent/; fi
 COPY --from=go-builder /build/dist/agent/linux/amd64/ /dist/agent/linux/amd64/
 
 # Apache-2.0 LICENSE and NOTICE — seeded into /srv/vigo/ and served to agents.
