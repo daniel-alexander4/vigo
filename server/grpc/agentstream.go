@@ -829,8 +829,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				return nil, status.Errorf(codes.Internal, "resolving fleet lookups: %v", err)
 			}
 			// foreach: over a now-resolved fleet: var (a list) expands here.
+			// Its items come from other envoys' self-reported data, so the
+			// fleet variant drops any item outside the safe character set.
 			for i := range cloned.Configcrates {
-				expanded, err := config.ExpandForEach(cloned.Configcrates[i].Resources, cloned.Vars)
+				expanded, err := config.ExpandFleetForEach(cloned.Configcrates[i].Resources, cloned.Vars)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "expanding foreach for configcrate %q: %v", cloned.Configcrates[i].Name, err)
 				}

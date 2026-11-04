@@ -4,6 +4,7 @@
 package config
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -310,7 +311,7 @@ envoys:
 		t.Fatalf("foreach resource should be unexpanded at load: %#v", cfg.Configcrates[0].Resources)
 	}
 
-	// Simulate the clone path: resolve the fleet lookup, then re-run ExpandForEach.
+	// Simulate the clone path: resolve the fleet lookup, then ExpandFleetForEach.
 	resetFleetMemo(store)
 	cloned := cfg.Clone()
 	members := func() []FleetMember {
@@ -320,7 +321,7 @@ envoys:
 		t.Fatal(err)
 	}
 	for i := range cloned.Configcrates {
-		expanded, err := ExpandForEach(cloned.Configcrates[i].Resources, cloned.Vars)
+		expanded, err := ExpandFleetForEach(cloned.Configcrates[i].Resources, cloned.Vars)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -337,6 +338,78 @@ envoys:
 	}
 	if got["allow-10.0.0.9"] {
 		t.Error("db host should not be in the web allow list")
+	}
+}
+
+// TestForeachOverFleetVar_HostileItemsDropped: fleet foreach items come
+// from other envoys' self-reported data. An item that could rewrite the
+// victim's when:, inject a template, or splice into a command is dropped;
+// a well-formed item still expands.
+func TestForeachOverFleetVar_HostileItemsDropped(t *testing.T) {
+	dir := setupDir(t)
+	writeFile(t, filepath.Join(dir, "configcrates", "peers.vgo"), `
+name: peers
+resources:
+  - name: "peer-{{ .Item }}"
+    type: exec
+    state: present
+    foreach: peer_names
+    when: "file_exists('/etc/peers/{{ .Item }}')"
+    command: "/usr/local/bin/add-peer {{ .Item }}"
+    unless: "/usr/local/bin/has-peer {{ .Item }}"
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "fw01"
+    configcrates: [peers]
+    vars:
+      peer_names:
+        fleet:
+          where: "tag('peer')"
+          select: "{{ .Traits.peer_name }}"
+`)
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	cfg := store.Get("fw01")
+	resetFleetMemo(store)
+	cloned := cfg.Clone()
+	hostile := []string{
+		`x') || true || ('`,       // when: structure rewrite
+		`{{ .Vars.db_password }}`, // template injection
+		`a;rm -rf /`,              // shell splice
+		`a b`,                     // argument split
+		`x'`,                      // unbalanced quote
+	}
+	var ms []FleetMember
+	for i, h := range hostile {
+		ms = append(ms, FleetMember{Hostname: fmt.Sprintf("bad%d", i), Tags: []string{"peer"}, Traits: map[string]string{"peer_name": h}})
+	}
+	ms = append(ms, FleetMember{Hostname: "good", Tags: []string{"peer"}, Traits: map[string]string{"peer_name": "web-1.example.com"}})
+	if err := store.ResolveFleetLookupsInConfig(cloned, func() []FleetMember { return ms }, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	expanded, err := ExpandFleetForEach(cloned.Configcrates[0].Resources, cloned.Vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(expanded) != 1 {
+		names := []string{}
+		for _, r := range expanded {
+			names = append(names, r.Name+" when="+r.When)
+		}
+		t.Fatalf("want only the well-formed item expanded, got %d: %v", len(expanded), names)
+	}
+	r := expanded[0]
+	if r.Name != "peer-web-1.example.com" || r.When != "file_exists('/etc/peers/web-1.example.com')" {
+		t.Errorf("good item expanded wrong: name=%q when=%q", r.Name, r.When)
+	}
+
+	// Operator-authored literal lists are trusted and keep any content.
+	lit, err := ExpandForEach([]ResourceConfig{{Name: "n-{{ .Item }}", ForEach: "xs"}}, map[string]any{"xs": []any{"a b", "it's"}})
+	if err != nil || len(lit) != 2 {
+		t.Fatalf("operator literal list: got %d, err %v", len(lit), err)
 	}
 }
 

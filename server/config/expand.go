@@ -15,6 +15,45 @@ import (
 // each key. Substitution applies to name, when, and all string attribute
 // values. Resources without ForEach pass through.
 func ExpandForEach(resources []ResourceConfig, vars map[string]any) ([]ResourceConfig, error) {
+	return expandForEach(resources, vars, false)
+}
+
+// ExpandFleetForEach is ExpandForEach for the per-envoy pass that runs after
+// ResolveFleetLookupsInConfig. Every foreach: still pending at that point is
+// over a fleet: var, so its items were rendered from OTHER envoys'
+// self-reported hostnames and traits — untrusted input. Items are spliced
+// into when:, names and attributes as text, so an item carrying `'`, `||`,
+// `{{` or a shell metacharacter could rewrite the victim's when: expression,
+// inject a template that reads its vars, or splice into an exec command.
+// Each item must therefore match fleetItemSafe; an item that does not is
+// dropped (with a warning naming it) rather than failing the whole bundle,
+// so one compromised envoy can exclude only itself.
+func ExpandFleetForEach(resources []ResourceConfig, vars map[string]any) ([]ResourceConfig, error) {
+	return expandForEach(resources, vars, true)
+}
+
+// fleetItemSafe reports whether a fleet-derived foreach item may be spliced
+// into a resource. The allowed set covers hostnames, IPv4/IPv6 addresses
+// (with zone and brackets), host:port, simple URLs/paths and version
+// strings. It excludes everything the when: lexer treats as structure
+// (quote, backslash, parens, `!`, `=`, `&`, `|`, comma, whitespace), the
+// template delimiters `{` `}`, and shell metacharacters.
+func fleetItemSafe(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune("._-:/@+%[]~", r):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func expandForEach(resources []ResourceConfig, vars map[string]any, untrusted bool) ([]ResourceConfig, error) {
 	var result []ResourceConfig
 	for _, res := range resources {
 		if res.ForEach == "" {
@@ -41,6 +80,14 @@ func ExpandForEach(resources []ResourceConfig, vars map[string]any) ([]ResourceC
 		}
 
 		for _, item := range items {
+			if untrusted {
+				s, isStr := item.(string)
+				if !isStr || !fleetItemSafe(s) {
+					slog.Warn("fleet foreach item dropped: contains characters outside the safe set",
+						"resource", res.Name, "foreach", res.ForEach, "item", fmt.Sprintf("%q", fmt.Sprint(item)))
+					continue
+				}
+			}
 			clone := cloneResource(res)
 			clone.ForEach = ""
 

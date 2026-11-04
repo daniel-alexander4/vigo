@@ -697,6 +697,8 @@ vars:
 
 Empty lists produce zero resources — canonical configcrates stay untouched.
 
+When `foreach` names a `fleet:` var, the items are rendered from other envoys' hostnames, IPs and traits, so Vigo treats them as untrusted. An item is used only if every character is a letter, a digit or one of `. _ - : / @ + % [ ] ~`. Any other item (spaces, quotes, `{{`, shell metacharacters) is dropped from the list and the server logs a `fleet foreach item dropped` warning. Lists you write yourself are not filtered.
+
 To instantiate a *whole configcrate* per item (not just one resource), put `foreach:` on the configcrate reference instead — see [Configcrate-level `foreach:`](#configcrate-level-foreach--stamp-out-a-configcrate-per-item).
 
 ### Configcrate-level `foreach:` — Stamp Out a Configcrate Per Item
