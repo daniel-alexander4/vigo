@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	vigoai "git.alexander4.io/vigo/server/ai"
@@ -32,6 +33,11 @@ import (
 // lives here. The pair was extracted from main.go::run() during the
 // Phase B refactor.
 func (s *Server) Run(ctx context.Context) error {
+	// Every background goroutine runs under this ctx, so they all wind down
+	// when Run returns for any reason, not only on the caller's cancel.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	s.startPeerReplication(ctx)
 	s.startAsyncFlushers(ctx)
 	s.startRetentionAndBackup(ctx)
@@ -62,22 +68,102 @@ func (s *Server) Run(ctx context.Context) error {
 
 	<-ctx.Done()
 	slog.Info("shutting down...")
-
-	s.grpcSrv.GracefulStop()
-	if s.operatorSrv != nil {
-		s.operatorSrv.GracefulStop()
-	}
-	if err := s.httpSrv.Shutdown(context.Background()); err != nil {
-		slog.Error("REST gateway shutdown error", "error", err)
-	}
-	if s.s3Srv != nil {
-		if err := s.s3Srv.Shutdown(context.Background()); err != nil {
-			slog.Error("curator S3 API shutdown error", "error", err)
-		}
-	}
+	s.shutdownListeners(shutdownTimeout)
 
 	slog.Info("server stopped")
 	return nil
+}
+
+// shutdownTimeout bounds each listener's graceful stop. Held AgentStreams and
+// TunnelStreams are long-lived, so GracefulStop alone could wait forever; past
+// the deadline the gRPC servers are stopped hard and the HTTP servers closed.
+const shutdownTimeout = 10 * time.Second
+
+// bgDrainTimeout bounds how long Close waits for background goroutines (the
+// flushers' final batch) before closing the DB anyway.
+const bgDrainTimeout = 15 * time.Second
+
+// goBG starts a server-owned background goroutine under panic recovery and
+// tracks it on s.bg so Close can wait for it. Only for goroutines that exit
+// when Run's ctx is cancelled.
+func (s *Server) goBG(name string, fn func()) {
+	s.bg.Add(1)
+	daemon.SafeGo(name, func() {
+		defer s.bg.Done()
+		fn()
+	})
+}
+
+// waitBackground waits for every goBG goroutine, up to timeout.
+func (s *Server) waitBackground(timeout time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		s.bg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		slog.Warn("background goroutines still running at shutdown; closing the database anyway", "waited", timeout)
+	}
+}
+
+// gracefulStopper is the subset of *grpc.Server that shutdown uses.
+type gracefulStopper interface {
+	GracefulStop()
+	Stop()
+}
+
+// stopGRPCBounded runs GracefulStop and falls back to Stop when it has not
+// returned within timeout (held streams never drain on their own).
+func stopGRPCBounded(name string, srv gracefulStopper, timeout time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		srv.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		slog.Warn("gRPC graceful stop timed out; forcing stop", "server", name, "timeout", timeout)
+		srv.Stop()
+		<-done
+	}
+}
+
+// shutdownHTTPBounded drains an HTTP server for up to timeout, then closes it.
+func shutdownHTTPBounded(name string, srv *http.Server, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("HTTP shutdown did not complete; closing", "server", name, "error", err)
+		_ = srv.Close()
+	}
+}
+
+// shutdownListeners stops every listener concurrently, each bounded by timeout.
+func (s *Server) shutdownListeners(timeout time.Duration) {
+	var wg sync.WaitGroup
+	stop := func(f func()) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f()
+		}()
+	}
+	if s.grpcSrv != nil {
+		stop(func() { stopGRPCBounded("grpc", s.grpcSrv, timeout) })
+	}
+	if s.operatorSrv != nil {
+		stop(func() { stopGRPCBounded("operator", s.operatorSrv, timeout) })
+	}
+	if s.httpSrv != nil {
+		stop(func() { shutdownHTTPBounded("rest", s.httpSrv, timeout) })
+	}
+	if s.s3Srv != nil {
+		stop(func() { shutdownHTTPBounded("curator-s3", s.s3Srv, timeout) })
+	}
+	wg.Wait()
 }
 
 // startPeerReplication captures the lifecycle ctx for the HA push loop.
@@ -141,9 +227,9 @@ func (s *Server) setPrimaryPushing(on bool) {
 // interval.
 func (s *Server) startAsyncFlushers(ctx context.Context) {
 	stateFlusher := fleet.NewStateFlusher(s.fleetIndex, s.queries, s.metrics)
-	daemon.SafeGo("state-flusher", func() { stateFlusher.Start(ctx, s.lastSeenFlush, 0) })
-	daemon.SafeGo("run-batcher", func() { s.runBatcher.Start(ctx, s.lastSeenFlush, s.lastSeenFlush/3) })
-	daemon.SafeGo("traits-batcher", func() { s.traitsBatch.Start(ctx, s.lastSeenFlush, 2*s.lastSeenFlush/3) })
+	s.goBG("state-flusher", func() { stateFlusher.Start(ctx, s.lastSeenFlush, 0) })
+	s.goBG("run-batcher", func() { s.runBatcher.Start(ctx, s.lastSeenFlush, s.lastSeenFlush/3) })
+	s.goBG("traits-batcher", func() { s.traitsBatch.Start(ctx, s.lastSeenFlush, 2*s.lastSeenFlush/3) })
 }
 
 // startTicketsRotation rotates TLS session-ticket keys daily on the
@@ -155,7 +241,7 @@ func (s *Server) startTicketsRotation(ctx context.Context) {
 	if s.ticketsStore == nil {
 		return
 	}
-	daemon.SafeGo("tickets-rotation", func() {
+	s.goBG("tickets-rotation", func() {
 		t := time.NewTicker(24 * time.Hour)
 		defer t.Stop()
 		for {
@@ -180,12 +266,12 @@ func (s *Server) startTicketsRotation(ctx context.Context) {
 // Litestream WAL replicator.
 func (s *Server) startRetentionAndBackup(ctx context.Context) {
 	taskReaper := task.NewReaper(s.queries)
-	daemon.SafeGo("task-reaper", func() { taskReaper.Start(ctx) })
+	s.goBG("task-reaper", func() { taskReaper.Start(ctx) })
 
 	retention := parseRetention(s.cfg.Database.Retention)
 	retentionPruner := db.NewRetentionPruner(s.queries, s.db, retention)
 	retentionPruner.SetPostgres(s.isPostgres)
-	daemon.SafeGo("retention-pruner", func() { retentionPruner.Start(ctx, 24*time.Hour) })
+	s.goBG("retention-pruner", func() { retentionPruner.Start(ctx, 24*time.Hour) })
 	slog.Info("retention pruner enabled", "retention", retention, "interval", "24h")
 
 	if !s.isPostgres && s.cfg.Backup.URL != "" {
@@ -200,7 +286,7 @@ func (s *Server) startRetentionAndBackup(ctx context.Context) {
 			Retention:       s.cfg.Backup.Retention,
 			SyncInterval:    s.cfg.Backup.SyncInterval,
 		})
-		daemon.SafeGo("litestream-replicator", func() {
+		s.goBG("litestream-replicator", func() {
 			if err := replicator.Start(ctx); err != nil && ctx.Err() == nil {
 				slog.Error("litestream replication failed", "error", err)
 			}
@@ -277,7 +363,7 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 	}
 	s.metrics.CheckinSignatureMode.WithLabelValues(sigMode).Set(1)
 	serverStartTime := time.Now()
-	daemon.SafeGo("uptime-tracker", func() {
+	s.goBG("uptime-tracker", func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -302,10 +388,10 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 		configcrateSource = s.configStore
 	}
 	metricsCollector := metrics.NewCollector(s.db, fleetSource, swarmSource, configcrateSource, s.metrics, s.baseInterval, s.offlineThreshold)
-	daemon.SafeGo("metrics-collector", func() { metricsCollector.Run(ctx, s.metricsInterval) })
+	s.goBG("metrics-collector", func() { metricsCollector.Run(ctx, s.metricsInterval) })
 
 	// Start stale envoy checker — fires envoy.stale events on transition.
-	daemon.SafeGo("stale-checker", func() { s.runStaleChecker(ctx) })
+	s.goBG("stale-checker", func() { s.runStaleChecker(ctx) })
 
 	// Start secret rotation watcher.
 	if s.cfg.Watcher.Enabled {
@@ -327,7 +413,7 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 					Details:   details,
 				})
 			})
-			daemon.SafeGo("secret-watcher", func() {
+			s.goBG("secret-watcher", func() {
 				if err := w.Run(ctx); err != nil && ctx.Err() == nil {
 					slog.Error("secret watcher error", "error", err)
 				}
@@ -340,30 +426,27 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 
 // startConvergenceAlerters starts the framework-aware drift alerter
 // and the compliance-threshold checker. The latter is gated by
-// cfg.CheckIn.ComplianceThreshold > 0.
-//
-// NOTE: the security-posture snapshot goroutine is started inside the
-// threshold-gated branch below — that matches the pre-refactor
-// behavior in main.go::run() exactly. The gating was almost certainly a
-// pre-existing indentation bug (security posture is independent of the
-// threshold checker), but the refactor preserves it byte-for-byte and
-// flags it as a separate follow-up.
+// cfg.CheckIn.ComplianceThreshold > 0; the audit re-verifier and the
+// security-posture snapshot always run.
 func (s *Server) startConvergenceAlerters(ctx context.Context) {
 	// Warm + periodically re-anchor the audit-chain verifier (boot full
 	// re-verify after any downtime, then daily). Always on — independent of
 	// the compliance threshold below.
-	daemon.SafeGo("audit-reverify", func() { s.runAuditReverify(ctx) })
+	s.goBG("audit-reverify", func() { s.runAuditReverify(ctx) })
 
 	// Start framework-aware drift alerter (background, not hot path).
 	// Scans recent runs every 5 minutes, enriches drift events with framework/control context.
-	daemon.SafeGo("framework-drift-alerter", func() { s.runFrameworkDriftAlerter(ctx) })
+	s.goBG("framework-drift-alerter", func() { s.runFrameworkDriftAlerter(ctx) })
 
 	// Start compliance threshold checker (threshold from checkin config, default 0 = disabled).
 	complianceThreshold := s.cfg.CheckIn.ComplianceThreshold
 	if complianceThreshold > 0 {
-		daemon.SafeGo("compliance-checker", func() { s.runComplianceChecker(ctx, complianceThreshold) })
-		daemon.SafeGo("security-posture-snapshot", func() { s.runSecurityPostureSnapshot(ctx) })
+		s.goBG("compliance-checker", func() { s.runComplianceChecker(ctx, complianceThreshold) })
 	}
+
+	// Security-posture snapshots run on their own schedule regardless of the
+	// compliance threshold: the posture history is independent of it.
+	s.goBG("security-posture-snapshot", func() { s.runSecurityPostureSnapshot(ctx) })
 }
 
 // startSnapshotters runs the four daily snapshot loops: convergence,
@@ -372,7 +455,7 @@ func (s *Server) startConvergenceAlerters(ctx context.Context) {
 // fresh boot.
 func (s *Server) startSnapshotters(ctx context.Context) {
 	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer + DB).
-	daemon.SafeGo("convergence-snapshot", func() {
+	s.goBG("convergence-snapshot", func() {
 		snapshot := func() {
 			s.fleetIndex.SnapshotConvergence()
 			s.persistConvergenceSnapshot(ctx)
@@ -392,7 +475,7 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 	})
 
 	// Start daily risk posture snapshotting.
-	daemon.SafeGo("risk-snapshot", func() {
+	s.goBG("risk-snapshot", func() {
 		daemon.Guard("risk-snapshot", func() { s.persistRiskSnapshot(ctx) })
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -407,7 +490,7 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 	})
 
 	// Start MTTR stats computation (daily, on same cadence as compliance snapshots).
-	daemon.SafeGo("mttr-stats", func() {
+	s.goBG("mttr-stats", func() {
 		daemon.Guard("mttr-stats", func() { s.computeAndStoreMTTR(ctx) })
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -422,7 +505,7 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 	})
 
 	// Start daily standards compliance snapshotting through the unified scorer.
-	daemon.SafeGo("compliance-snapshot", func() {
+	s.goBG("compliance-snapshot", func() {
 		daemon.Guard("compliance-snapshot", func() { s.reportHandler.PersistComplianceSnapshot(ctx) })
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -441,7 +524,7 @@ func (s *Server) startSnapshotters(ctx context.Context) {
 // integrations are configured.
 func (s *Server) startGRC(ctx context.Context) {
 	if s.grcPusher != nil {
-		daemon.SafeGo("grc-pusher", func() { s.grcPusher.Start(ctx) })
+		s.goBG("grc-pusher", func() { s.grcPusher.Start(ctx) })
 	}
 }
 
@@ -452,7 +535,7 @@ func (s *Server) startNVDEnricher(ctx context.Context) {
 	if s.nvdEnricher == nil {
 		return
 	}
-	daemon.SafeGo("nvd-enricher", func() {
+	s.goBG("nvd-enricher", func() {
 		s.nvdEnricher.Run(ctx, func() []string {
 			return collectFleetCVEIDs(s.fleetIndex)
 		})
@@ -468,7 +551,7 @@ func (s *Server) startStacksWatcher(ctx context.Context) {
 		return
 	}
 	w := s.stacksWatcher
-	daemon.SafeGo("stacks-watcher", func() {
+	s.goBG("stacks-watcher", func() {
 		if err := w.Run(ctx); err != nil {
 			slog.Warn("stacks watcher exited", "error", err)
 		}
@@ -492,13 +575,13 @@ func (s *Server) startSwarm(ctx context.Context) {
 	if !s.swarmEnabled {
 		return
 	}
-	daemon.SafeGo("curator-feed", func() { s.runCuratorFeed(ctx, 5*time.Minute) })
+	s.goBG("curator-feed", func() { s.runCuratorFeed(ctx, 5*time.Minute) })
 
 	swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
 	swarmPruner.SetTracker(s.peerTracker)
 	swarmPruner.SetManifestStore(s.manifestStore)
 	swarmPruner.SetLivenessTTL(parseLivenessTTL(s.cfg.Swarm.ManifestLivenessTTL))
-	daemon.SafeGo("swarm-pruner", func() { swarmPruner.Start(ctx, 24*time.Hour) })
+	s.goBG("swarm-pruner", func() { swarmPruner.Start(ctx, 24*time.Hour) })
 }
 
 // startHTTPServer starts the REST + UI gateway. Errors are logged from
@@ -537,7 +620,7 @@ func (s *Server) startSpannerGossip(ctx context.Context) {
 	if s.spannerGossip == nil {
 		return
 	}
-	daemon.SafeGo("spanner-gossip", func() { s.spannerGossip.Run(ctx) })
+	s.goBG("spanner-gossip", func() { s.spannerGossip.Run(ctx) })
 }
 
 // startSpannerAutoAdmit runs the config-driven hands-off peering loop
@@ -556,7 +639,7 @@ func (s *Server) startSpannerAutoAdmit(ctx context.Context) {
 	peers := s.cfg.Spanner.Peers
 	hostname := s.cfg.Server.Hostname
 	patterns := s.cfg.Spanner.Patterns
-	daemon.SafeGo("spanner-auto-admit", func() {
+	s.goBG("spanner-auto-admit", func() {
 		s.spannerGossip.AutoAdmit(ctx, peers, hostname, patterns)
 	})
 }

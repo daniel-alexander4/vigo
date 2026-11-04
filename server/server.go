@@ -194,6 +194,11 @@ type Server struct {
 	peerPrimary *peer.Primary
 	peerPushCtx context.Context
 	peerPushMu  sync.Mutex
+	// bg tracks the server-owned background goroutines started by Run
+	// (flushers, batchers, pruners, alerters, snapshotters, gossip). Close
+	// waits on it, bounded by bgDrainTimeout, before closing the DB, so a
+	// flusher's final Flush on shutdown is not cut off by a closed handle.
+	bg sync.WaitGroup
 
 	// --- Assigned during the fleet-rehydrate + spanner-admin stages of
 	// NewServer.
@@ -1702,6 +1707,9 @@ func (s *Server) Close() error {
 	if s.workflowEngine != nil {
 		s.workflowEngine.Close()
 	}
+	// Background goroutines (state/run/traits flushers write their final
+	// batch on ctx cancel) must finish before the DB handle goes away.
+	s.waitBackground(bgDrainTimeout)
 	if s.db != nil {
 		_ = s.db.Close()
 	}
