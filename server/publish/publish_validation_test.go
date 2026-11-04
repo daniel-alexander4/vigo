@@ -51,7 +51,7 @@ func TestPublish_RefusesLoaderValidationErrors(t *testing.T) {
 	writeSelfProtectViolation(t, env.stacks)
 	existing := seedLive(t, env.live)
 
-	res, err := Publish(noURLOpts(env), nil)
+	res, err := Publish(noURLOpts(env))
 	if err == nil {
 		t.Fatal("Publish synced a tree with loader validation errors")
 	}
@@ -109,7 +109,7 @@ func TestPublishFile_RefusesLoaderValidationErrors(t *testing.T) {
 	writeSelfProtectViolation(t, env.stacks)
 	seedLive(t, env.live)
 
-	_, err := PublishFile("configcrates/risky.vgo", noURLOpts(env), nil)
+	_, err := PublishFile("configcrates/risky.vgo", noURLOpts(env))
 	var vf *ValidationFailedError
 	if !errors.As(err, &vf) {
 		t.Fatalf("want *ValidationFailedError, got %v", err)
@@ -127,7 +127,7 @@ func TestPublishFile_RejectsPathOutsideStacks(t *testing.T) {
 	writeFile(t, outside, "name: outside\nresources: []\n")
 
 	for _, p := range []string{"../outside.vgo", "configcrates/../../outside.vgo", outside, ".."} {
-		_, err := PublishFile(p, noURLOpts(env), nil)
+		_, err := PublishFile(p, noURLOpts(env))
 		if err == nil || !strings.Contains(err.Error(), "not inside") {
 			t.Errorf("PublishFile(%q) = %v, want containment refusal", p, err)
 		}
@@ -141,7 +141,7 @@ func TestPublishFile_WritesCanonicalFile(t *testing.T) {
 	env := withTestDirs(t)
 	writeValidConfig(t, env.stacks)
 
-	res, err := PublishFile("configcrates/nginx.vgo", noURLOpts(env), nil)
+	res, err := PublishFile("configcrates/nginx.vgo", noURLOpts(env))
 	if err != nil {
 		t.Fatalf("PublishFile: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestPublishFile_WritesCanonicalFile(t *testing.T) {
 	// form), not the raw stacks bytes.
 	full := withTestDirs(t)
 	writeValidConfig(t, full.stacks)
-	if _, err := Publish(noURLOpts(full), nil); err != nil {
+	if _, err := Publish(noURLOpts(full)); err != nil {
 		t.Fatal(err)
 	}
 	want, err := os.ReadFile(filepath.Join(full.live, "configcrates", "nginx.vgo"))

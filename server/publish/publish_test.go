@@ -156,7 +156,7 @@ func TestPublish_SyncsFiles(t *testing.T) {
 	env := withTestDirs(t)
 	writeValidConfig(t, env.stacks)
 
-	res, err := Publish(noURLOpts(env), nil)
+	res, err := Publish(noURLOpts(env))
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
@@ -218,7 +218,7 @@ envoys:
     configcrates: [users/dan]
 `)
 
-	res, err := Publish(noURLOpts(env), nil)
+	res, err := Publish(noURLOpts(env))
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
@@ -299,7 +299,7 @@ envoys:
     configcrates: [sshd]
 `)
 
-	if _, err := Publish(noURLOpts(env), nil); err != nil {
+	if _, err := Publish(noURLOpts(env)); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
 
@@ -397,7 +397,7 @@ func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
 	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
 	writeFile(t, filepath.Join(env.live, "configcrates", "old.vgo"), "old content")
 
-	_, err := Publish(noURLOpts(env), nil)
+	_, err := Publish(noURLOpts(env))
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
@@ -417,7 +417,7 @@ envoys:
 	os.MkdirAll(filepath.Join(env.live, "configcrates"), 0o755)
 	writeFile(t, filepath.Join(env.live, "configcrates", "existing.vgo"), "keep me")
 
-	_, err := Publish(noURLOpts(env), nil)
+	_, err := Publish(noURLOpts(env))
 	if err == nil {
 		t.Fatal("expected validation failure")
 	}
@@ -447,7 +447,7 @@ envoys:
     configcrates: [custom]
 `)
 
-	res, err := Publish(env.opts, nil)
+	res, err := Publish(env.opts)
 	if err != nil {
 		t.Fatalf("expected skip_validation publish to succeed, got: %v", err)
 	}
@@ -463,7 +463,7 @@ func TestPublish_SkipsMissingProposedSubdirs(t *testing.T) {
 	os.MkdirAll(filepath.Join(env.live, "vars"), 0o755)
 	writeFile(t, filepath.Join(env.live, "vars", "old.yaml"), "old")
 
-	_, err := Publish(noURLOpts(env), nil)
+	_, err := Publish(noURLOpts(env))
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
@@ -478,13 +478,13 @@ func TestPublish_NothingToPublish(t *testing.T) {
 	writeValidConfig(t, env.stacks)
 
 	// First publish.
-	_, err := Publish(noURLOpts(env), nil)
+	_, err := Publish(noURLOpts(env))
 	if err != nil {
 		t.Fatalf("first publish failed: %v", err)
 	}
 
 	// Second publish — nothing changed.
-	res, err := Publish(noURLOpts(env), nil)
+	res, err := Publish(noURLOpts(env))
 	if err != nil {
 		t.Fatalf("second publish failed: %v", err)
 	}
@@ -825,7 +825,7 @@ func TestPublish_PrunesUnreferenced(t *testing.T) {
 	env := withTestDirs(t)
 	writePruneFixture(t, env)
 
-	res, err := Publish(noURLOpts(env), nil)
+	res, err := Publish(noURLOpts(env))
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
@@ -873,7 +873,7 @@ func TestPublish_NoPrunePreservesEverything(t *testing.T) {
 	opts := noURLOpts(env)
 	opts.NoPrune = true
 
-	if _, err := Publish(opts, nil); err != nil {
+	if _, err := Publish(opts); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
 
@@ -918,7 +918,7 @@ envoys:
     configcrates: []
 `)
 
-	if _, err := Publish(noURLOpts(env), nil); err != nil {
+	if _, err := Publish(noURLOpts(env)); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
 

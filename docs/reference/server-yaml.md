@@ -633,7 +633,7 @@ rate_limit:
 
 ## maintenance
 
-Global change freeze — `vigocli config publish` is blocked until `freeze_until` passes. For code freezes, customer maintenance windows, or incident response. Bypass requires editing the file and reloading, so the freeze is real.
+Global change freeze — `vigocli config publish` (and the spanner stacks watcher) is blocked until `freeze_until` passes. Publish reads it from `server.yaml` in the server root on every run. For code freezes, customer maintenance windows, or incident response. Bypass requires editing the file, so the freeze is real; `vigocli config unfreeze` does not lift it. A value that is not RFC3339 blocks publishes until it is fixed.
 
 ```yaml
 maintenance:

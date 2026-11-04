@@ -70,20 +70,19 @@ type ConfigHandler struct {
 	convergenceMonitor *publish.ConvergenceMonitor
 	publishCfg         config.PublishSection
 	aiCfg              config.AISection
-	assistant          *ai.Assistant  // nil when AI is not enabled
-	auditWriter        auditRecorder  // nil-safe tamper-evident audit writer
-	publishState       *publish.State // freeze deadline owner; required for Freeze/Unfreeze
+	assistant          *ai.Assistant // nil when AI is not enabled
+	auditWriter        auditRecorder // nil-safe tamper-evident audit writer
 	metrics            *metrics.Metrics
 	liveDir            string                // .live/ path for rollback
 	historyDir         string                // history dir for rollback / list-versions
 	snapshotCompliance func(context.Context) // optional; fired after a successful reload so dashboard standards-summary refreshes
 }
 
-// NewConfigHandler creates a ConfigHandler. publishState carries the
-// per-process freeze deadline. liveDir / historyDir are the paths the
-// Rollback and ListVersions handlers operate on; empty values fall back
-// to the publish.Default* constants.
-func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex, publishState *publish.State, liveDir, historyDir string) *ConfigHandler {
+// NewConfigHandler creates a ConfigHandler. liveDir / historyDir are the
+// paths the Rollback, ListVersions and Freeze handlers operate on (the
+// freeze is persisted beside liveDir, see publish.SetFreeze); empty values
+// fall back to the publish.Default* constants.
+func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex, liveDir, historyDir string) *ConfigHandler {
 	if liveDir == "" {
 		liveDir = publish.DefaultLiveDir
 	}
@@ -91,12 +90,11 @@ func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, flee
 		historyDir = publish.DefaultHistoryDir
 	}
 	return &ConfigHandler{
-		queries:      queries,
-		configStore:  configStore,
-		fleetIndex:   fleetIndex,
-		publishState: publishState,
-		liveDir:      liveDir,
-		historyDir:   historyDir,
+		queries:     queries,
+		configStore: configStore,
+		fleetIndex:  fleetIndex,
+		liveDir:     liveDir,
+		historyDir:  historyDir,
 	}
 }
 
@@ -504,11 +502,10 @@ func (h *ConfigHandler) Freeze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.publishState == nil {
-		writeError(w, http.StatusInternalServerError, "publish state not configured")
+	if err := publish.SetFreeze(h.liveDir, t); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.publishState.SetFreezeUntil(t)
 
 	recordAudit(r.Context(), h.auditWriter, "config.freeze", actorFromRequest(r), "rest",
 		"publish frozen until "+t.Format(time.RFC3339), "")
@@ -518,11 +515,10 @@ func (h *ConfigHandler) Freeze(w http.ResponseWriter, r *http.Request) {
 
 // Unfreeze removes the global config publish freeze.
 func (h *ConfigHandler) Unfreeze(w http.ResponseWriter, r *http.Request) {
-	if h.publishState == nil {
-		writeError(w, http.StatusInternalServerError, "publish state not configured")
+	if err := publish.ClearFreeze(h.liveDir); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.publishState.ClearFreeze()
 
 	recordAudit(r.Context(), h.auditWriter, "config.unfreeze", actorFromRequest(r), "rest",
 		"publish freeze cleared", "")

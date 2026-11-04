@@ -419,12 +419,14 @@ vigocli config history show <id>
 
 Rollback config to a previous snapshot. List available versions if no argument given.
 
+Every publish snapshots the tree it is about to sync into `config-history/` before `.live/` changes; a publish whose snapshot fails is refused and nothing reaches the fleet. Version names carry nanoseconds, so two publishes in the same second never share a snapshot. Publishes and rollbacks take one lock (`<server-root>/.publish.lock`), so a rollback never swaps `.live/` out in the middle of a publish.
+
 ```bash
 # List available versions
 vigocli config rollback
 
 # Rollback to a specific version
-vigocli config rollback 20260313T143000Z
+vigocli config rollback 20260313T143000.123456789Z
 ```
 
 ### Example
@@ -432,17 +434,18 @@ vigocli config rollback 20260313T143000Z
 ```
 $ vigocli config rollback
 Available versions:
-  20260313T143000Z
-  20260312T091500Z
-  20260311T160000Z
+  20260313T143000.123456789Z
+  20260312T091500.004211932Z
 
-$ vigocli config rollback 20260312T091500Z
-Rolled back to version 20260312T091500Z
+$ vigocli config rollback 20260312T091500.004211932Z
+Rolled back to version 20260312T091500.004211932Z
 ```
 
 ## config freeze
 
 Freeze config publishes until a specified time. Accepts either an RFC3339 timestamp or a duration.
+
+The freeze is written to `<server-root>/.publish-freeze`, so it survives a server restart and `vigocli config publish` refuses to run while it is active. `maintenance.freeze_until` in `server.yaml` is a second freeze that only an edit to the file lifts; see [server.yaml](../server-yaml.md#maintenance). A stacks push picked up by the spanner stacks watcher is held back by either freeze too.
 
 ```bash
 vigocli config freeze --until <RFC3339|duration>

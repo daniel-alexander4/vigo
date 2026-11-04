@@ -128,9 +128,8 @@ type Server struct {
 	authMethod   string
 
 	// --- Registry + initial subsystems ---
-	reg          *registry.Registry
-	publishState *publish.State
-	configStore  *config.ConfigStore
+	reg         *registry.Registry
+	configStore *config.ConfigStore
 
 	// --- Tuning ---
 	baseInterval     time.Duration
@@ -582,10 +581,6 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 
 	s.reg = registry.NewRegistry(s.queries)
 
-	// publishState holds the per-process mutable freeze deadline.
-	// Constructed once and threaded into ConfigHandler via NewGateway.
-	s.publishState = &publish.State{}
-
 	// Warn if .live directory has overly permissive permissions.
 	if warning := publish.CheckLivePermissions(s.liveDir); warning != "" {
 		slog.Warn(warning)
@@ -846,6 +841,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 				"/var/lib/vigo/swarm/gitback/projects",
 				pid,
 				s.liveDir,
+				s.historyDir,
 				s.configStore,
 			)
 		} else {
@@ -1396,7 +1392,7 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 			slog.Info("curator S3 credential store ready")
 		}
 
-		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, "unix://"+s.adminSocketPath(), s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.cfg.Publish, s.cfg.Branding, s.cfg.Sandgorgon.Enabled, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.liveDir, s.historyDir, s.promReg, s.metrics, gwOpts...)
+		gwMux, uiHandler, configHandler, gwErr := api.NewGateway(ctx, "unix://"+s.adminSocketPath(), s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.cfg.Publish, s.cfg.Branding, s.cfg.Sandgorgon.Enabled, s.peerService, s.auditWriter, s.complianceDocsStore, s.liveDir, s.historyDir, s.promReg, s.metrics, gwOpts...)
 		if gwErr != nil {
 			return nil, fmt.Errorf("creating REST gateway: %w", gwErr)
 		}

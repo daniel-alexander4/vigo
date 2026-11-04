@@ -48,22 +48,22 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 	histDir := filepath.Join(tmpDir, "history")
 
 	// Create a live dir with some content and take two snapshots.
-	// Snapshots use second-level timestamps so we must space them apart.
 	os.MkdirAll(filepath.Join(liveDir, "configcrates"), 0o755)
 	os.WriteFile(filepath.Join(liveDir, "configcrates", "good.vgo"), []byte("name: good"), 0o644)
 	// Snapshot 1 (the "previous good" config).
-	v1, err := SnapshotLive(liveDir, histDir, 20)
+	v1, err := SnapshotTree(liveDir, histDir, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Wait so the second snapshot gets a different timestamp.
-	time.Sleep(1100 * time.Millisecond)
-
-	// Modify live dir and take another snapshot (the "bad" config that triggers rollback).
+	// Modify live dir and take another snapshot (the "bad" config that
+	// triggers rollback) in the same second: snapshot names are unique.
 	os.WriteFile(filepath.Join(liveDir, "configcrates", "bad.vgo"), []byte("name: bad"), 0o644)
-	_, err = SnapshotLive(liveDir, histDir, 20)
+	v2, err := SnapshotTree(liveDir, histDir, 20)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recordLiveVersion(liveDir, v2); err != nil {
 		t.Fatal(err)
 	}
 

@@ -44,7 +44,7 @@ import (
 // reg is the per-instance prometheus registry whose collectors the /metrics
 // endpoint exposes; m is the same registry's collector set, threaded into
 // subhandlers (bootstrap, etc.) that emit metrics.
-func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, publishCfg config.PublishSection, brandingCfg config.BrandingSection, sandgorgonEnabled bool, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
+func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, publishCfg config.PublishSection, brandingCfg config.BrandingSection, sandgorgonEnabled bool, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, liveDir, historyDir string, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, *ConfigHandler, error) {
 	gwMux := runtime.NewServeMux()
 
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
@@ -81,7 +81,7 @@ func NewGateway(ctx context.Context, grpcAddr, caFile string, queries *db.Querie
 	// Mount config publish history, versioning, rollback, and reload.
 	// Spanner-mode stacks distribution is gitback-driven (ADR-025
 	// Slice 4).
-	configHandler := NewConfigHandler(queries, configStore, fleetIndex, publishState, liveDir, historyDir)
+	configHandler := NewConfigHandler(queries, configStore, fleetIndex, liveDir, historyDir)
 	configHandler.SetAuditWriter(aw)
 	configHandler.SetMetrics(m)
 	if assistant != nil {

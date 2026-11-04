@@ -65,7 +65,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 			if dryRun {
 				return fmt.Errorf("--file and --dry-run cannot be combined")
 			}
-			res, err := publish.PublishFile(filePath, opts, nil)
+			res, err := publish.PublishFile(filePath, opts)
 			if err != nil {
 				printValidationFailure(res, err)
 				suggestFixes(err, !askAI, opts)
@@ -103,7 +103,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStacksDir, publis
 			return nil
 		}
 
-		res, err := publish.Publish(opts, nil)
+		res, err := publish.Publish(opts)
 		if err != nil {
 			printValidationFailure(res, err)
 			suggestFixes(err, !askAI, opts)

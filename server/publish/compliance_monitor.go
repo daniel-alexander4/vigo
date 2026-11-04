@@ -5,6 +5,7 @@ package publish
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -62,7 +63,10 @@ func (m *ConvergenceMonitor) Start(threshold int, window time.Duration) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	daemon.SafeGo("convergence-monitor", func() { m.run(ctx, threshold, window) })
+	// Pin the version this monitor guards now: the rollback target is the
+	// snapshot that preceded it, however many snapshots appear later.
+	published := LiveVersion(m.liveDir)
+	daemon.SafeGo("convergence-monitor", func() { m.run(ctx, threshold, window, published) })
 }
 
 // Stop cancels the active monitor, if any.
@@ -75,7 +79,7 @@ func (m *ConvergenceMonitor) Stop() {
 	}
 }
 
-func (m *ConvergenceMonitor) run(ctx context.Context, threshold int, window time.Duration) {
+func (m *ConvergenceMonitor) run(ctx context.Context, threshold int, window time.Duration, published string) {
 	slog.Info("convergence monitor started",
 		"threshold", threshold,
 		"window", window,
@@ -115,42 +119,70 @@ func (m *ConvergenceMonitor) run(ctx context.Context, threshold int, window time
 					"converged_pct", pct,
 					"threshold", threshold,
 				)
-				m.triggerRollback()
+				m.triggerRollback(published)
 				return
 			}
 		}
 	}
 }
 
-func (m *ConvergenceMonitor) triggerRollback() {
-	// Find the most recent snapshot version to roll back to.
-	versions, err := ListVersions(m.historyDir)
-	if err != nil || len(versions) == 0 {
-		slog.Error("convergence monitor: cannot rollback, no config snapshots available", "error", err)
-		return
-	}
-
-	// The latest snapshot is versions[0] — this is the snapshot taken by the
-	// publish that just triggered this monitor. We need the one before it
-	// (the pre-publish state).
-	if len(versions) < 2 {
-		slog.Error("convergence monitor: cannot rollback, only one config snapshot available (no previous version)")
-		return
-	}
-	version := versions[1]
-
-	slog.Info("convergence monitor: rolling back to previous config", "version", version)
-
-	if err := RollbackToVersion(m.historyDir, version, m.liveDir); err != nil {
+func (m *ConvergenceMonitor) triggerRollback(published string) {
+	version, err := rollbackFrom(m.historyDir, m.liveDir, published)
+	if err != nil {
 		slog.Error("convergence monitor: rollback failed", "error", err)
 		return
 	}
 
-	slog.Info("convergence monitor: rollback complete, reloading config")
+	slog.Info("convergence monitor: rolled back to previous config, reloading", "version", version)
 
 	if m.onRollback != nil {
 		if err := m.onRollback(); err != nil {
 			slog.Error("convergence monitor: config reload after rollback failed", "error", err)
 		}
 	}
+}
+
+// rollbackFrom rolls .live back to the snapshot that preceded published,
+// choosing the target and swapping under one hold of the publish lock so
+// no publish can land between the check and the swap.
+func rollbackFrom(historyDir, liveDir, published string) (string, error) {
+	unlock, err := lockPublish(liveDir)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	version, err := rollbackTarget(historyDir, liveDir, published)
+	if err != nil {
+		return "", err
+	}
+	if err := rollbackLocked(historyDir, version, liveDir); err != nil {
+		return "", err
+	}
+	return version, recordLiveVersion(liveDir, version)
+}
+
+// rollbackTarget returns the snapshot that preceded published — the live
+// version the monitor was started for. It refuses when .live no longer
+// holds published (another publish or a manual rollback has happened
+// since), or when published has no snapshot or no predecessor.
+func rollbackTarget(historyDir, liveDir, published string) (string, error) {
+	if published == "" {
+		return "", fmt.Errorf("the live config version is unknown (no snapshot recorded for it)")
+	}
+	if cur := LiveVersion(liveDir); cur != published {
+		return "", fmt.Errorf("live config changed since the monitor started (%s, now %s); not rolling back", published, cur)
+	}
+	versions, err := ListVersions(historyDir)
+	if err != nil {
+		return "", err
+	}
+	for i, v := range versions {
+		if v == published {
+			if i+1 >= len(versions) {
+				return "", fmt.Errorf("no snapshot older than %s", published)
+			}
+			return versions[i+1], nil
+		}
+	}
+	return "", fmt.Errorf("snapshot %s not found in %s", published, historyDir)
 }

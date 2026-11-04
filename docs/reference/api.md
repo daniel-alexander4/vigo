@@ -909,7 +909,7 @@ Rollback to a previous config snapshot.
 
 **Permission:** `config.publish`
 
-Set a global config publish freeze.
+Set a global config publish freeze. The deadline is persisted to `<server-root>/.publish-freeze`, so it survives a restart and `vigocli config publish` honours it.
 
 **Request body:**
 

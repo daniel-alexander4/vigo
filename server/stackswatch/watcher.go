@@ -9,16 +9,16 @@
 // `git fetch` from peers — both paths surface as fsnotify events on
 // the refs subtree.
 //
-// Slice 3 scope: react to ref changes by calling ConfigReloader.Reload().
-// Slice 4 will add the bare→.live pull step before the reload (today
-// the .live/ dir is unchanged so the reload is a no-op functionally,
-// but the watcher infrastructure is in place).
+// On a settled ref change the watcher extracts HEAD into a temp tree and
+// publishes it through publish.Publish — the same validation, lint,
+// snapshot, publish lock and atomic sync `vigocli config publish` uses —
+// then calls ConfigReloader.Reload(). A tree that fails validation never
+// reaches .live/, and a publish freeze holds pushed commits back.
 //
 // Design parallels server/watcher/ (the secrets-rotation watcher):
 // long-lived goroutine, single Reload entry point, callbacks invoked
-// from a background context. ConfigStore.Reload is concurrent-safe
-// (writes briefly hold the store's RWMutex; readers stay live during
-// the swap).
+// from a background context. ConfigStore.Reload serializes overlapping
+// reloads.
 package stackswatch
 
 import (
@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/daemon"
+	"git.alexander4.io/vigo/server/publish"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -55,29 +56,35 @@ const QuiesceDebounce = 250 * time.Millisecond
 // detected ref change, pulls the project's HEAD content into the
 // `.live/` dir and triggers a config reload (ADR-025 Slice 4).
 //
-// `git archive HEAD | tar -x` is the pull mechanism — no working
-// git tree in `.live/`, just a snapshot of the latest commit. The
-// sync into `.live/` is delete-aware (files removed from the
-// stacks are removed from `.live/`).
+// `git archive HEAD | tar -x` extracts the latest commit into a temp
+// tree; publish.Publish validates it and syncs it into `.live/`
+// (delete-aware: files removed from the stacks leave `.live/`).
 type Watcher struct {
-	bareRepo string
-	liveDir  string
-	refsDir  string
-	reloader ConfigReloader
+	bareRepo   string
+	liveDir    string
+	historyDir string
+	refsDir    string
+	reloader   ConfigReloader
 }
+
+// pullTimeout bounds the git archive | tar extraction. A hung git or tar
+// would otherwise block the watcher loop forever.
+const pullTimeout = 2 * time.Minute
 
 // New returns a Watcher for the project at projectsRoot/<projectIDHex>.git
 // whose HEAD content syncs into liveDir on every ref-change settle.
 // projectsRoot is typically `/var/lib/vigo/swarm/gitback/projects`,
 // projectIDHex is the hex of the stacks project_id, and liveDir
-// is typically `/srv/vigo/stacks/.live`.
-func New(projectsRoot, projectIDHex, liveDir string, reloader ConfigReloader) *Watcher {
+// is typically `/srv/vigo/.live` and historyDir its sibling
+// `config-history` (publish.PathsUnder).
+func New(projectsRoot, projectIDHex, liveDir, historyDir string, reloader ConfigReloader) *Watcher {
 	repoDir := filepath.Join(projectsRoot, projectIDHex+".git")
 	return &Watcher{
-		bareRepo: repoDir,
-		liveDir:  liveDir,
-		refsDir:  filepath.Join(repoDir, "refs"),
-		reloader: reloader,
+		bareRepo:   repoDir,
+		liveDir:    liveDir,
+		historyDir: historyDir,
+		refsDir:    filepath.Join(repoDir, "refs"),
+		reloader:   reloader,
 	}
 }
 
@@ -194,16 +201,15 @@ func (w *Watcher) Run(ctx context.Context) error {
 	}
 }
 
-// pullIntoLive runs `git archive HEAD | tar -x` from the bare repo
-// into a temp dir, then syncs the temp into `.live/` with
-// delete-awareness (anything in `.live/` not present in HEAD is
-// removed). No working git tree lands in `.live/` — operators
-// inspecting it still see plain YAML.
+// pullIntoLive extracts HEAD from the bare repo into a temp tree with
+// `git archive HEAD | tar -x` (both bounded by pullTimeout) and publishes
+// that tree into `.live/` through publish.Publish. No working git tree
+// lands in `.live/` — operators inspecting it still see plain YAML.
 //
-// On bare repos with no commits yet (e.g. between project founding
-// and the first push), `git archive HEAD` fails with a clear
-// error; the watcher logs and skips the reload — `.live/` keeps
-// whatever it had.
+// On bare repos with no commits yet (between project founding and the
+// first push), `git archive HEAD` fails with a clear error; the watcher
+// logs and skips the reload — `.live/` keeps whatever it had. A tree that
+// fails validation, or a publish freeze, likewise leaves `.live/` alone.
 func (w *Watcher) pullIntoLive() error {
 	tmp, err := os.MkdirTemp("", "vigo-stacks-pull-*")
 	if err != nil {
@@ -211,12 +217,29 @@ func (w *Watcher) pullIntoLive() error {
 	}
 	defer os.RemoveAll(tmp)
 
-	// `git archive --format=tar HEAD` writes a tarball of HEAD's
-	// tree to stdout. Pipe through `tar -x` to materialize in tmp.
-	// Use a single shell command so the pipe is set up by the
-	// shell — no Go-side plumbing needed.
-	archive := exec.Command("git", "--git-dir="+w.bareRepo, "archive", "--format=tar", "HEAD")
-	untar := exec.Command("tar", "-xf", "-", "-C", tmp)
+	if err := extractHead(w.bareRepo, tmp, pullTimeout); err != nil {
+		return err
+	}
+
+	res, err := publish.Publish(publish.Options{
+		StacksDir:  tmp,
+		LiveDir:    w.liveDir,
+		HistoryDir: w.historyDir,
+	})
+	if err != nil {
+		return fmt.Errorf("publishing HEAD into %s: %w", w.liveDir, err)
+	}
+	slog.Info("stackswatch: published HEAD", "changed", len(res.Changed), "removed", len(res.Removed))
+	return nil
+}
+
+// extractHead materializes bareRepo's HEAD tree into dst. git and tar run
+// under one context with the given timeout; on expiry both are killed.
+func extractHead(bareRepo, dst string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	archive := exec.CommandContext(ctx, "git", "--git-dir="+bareRepo, "archive", "--format=tar", "HEAD")
+	untar := exec.CommandContext(ctx, "tar", "-xf", "-", "-C", dst)
 	pipeR, pipeW := io.Pipe()
 	archive.Stdout = pipeW
 	untar.Stdin = pipeR
@@ -225,6 +248,7 @@ func (w *Watcher) pullIntoLive() error {
 	}
 	if err := untar.Start(); err != nil {
 		_ = archive.Process.Kill() // best-effort cleanup; the start failure is already being returned
+		_ = archive.Wait()
 		return fmt.Errorf("starting tar -x: %w", err)
 	}
 	// archive writes the tarball into the pipe; untar drains it
@@ -233,93 +257,14 @@ func (w *Watcher) pullIntoLive() error {
 	archiveErr := archive.Wait()
 	pipeW.Close()
 	untarErr := untar.Wait()
+	if ctx.Err() != nil {
+		return fmt.Errorf("git archive | tar timed out after %s: %w", timeout, ctx.Err())
+	}
 	if archiveErr != nil {
 		return fmt.Errorf("git archive HEAD (no commits yet?): %w", archiveErr)
 	}
 	if untarErr != nil {
 		return fmt.Errorf("tar -x: %w", untarErr)
 	}
-
-	// Ensure live dir exists.
-	if err := os.MkdirAll(w.liveDir, 0o755); err != nil {
-		return fmt.Errorf("creating live dir %s: %w", w.liveDir, err)
-	}
-
-	// Delete files in live/ that aren't in tmp/.
-	if err := pruneMissing(w.liveDir, tmp); err != nil {
-		return fmt.Errorf("pruning live dir: %w", err)
-	}
-	// Copy tmp/ over live/ (adds + updates; preserved files are
-	// just overwritten with identical content — cheap).
-	if err := copyTree(tmp, w.liveDir); err != nil {
-		return fmt.Errorf("copying into live dir: %w", err)
-	}
 	return nil
-}
-
-// pruneMissing walks `dst` and removes any file or directory whose
-// relative path doesn't exist under `src`. Symmetric `git rm` for
-// the .live/ dir without depending on git.
-func pruneMissing(dst, src string) error {
-	return filepath.Walk(dst, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(dst, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		srcCounterpart := filepath.Join(src, rel)
-		if _, statErr := os.Stat(srcCounterpart); os.IsNotExist(statErr) {
-			if info.IsDir() {
-				if err := os.RemoveAll(path); err != nil {
-					return err
-				}
-				return filepath.SkipDir
-			}
-			return os.Remove(path)
-		}
-		return nil
-	})
-}
-
-// copyTree recursively copies src/* into dst/, preserving relative
-// paths. Used in lockstep with pruneMissing to achieve
-// rsync-with-delete semantics.
-func copyTree(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		target := filepath.Join(dst, rel)
-		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode().Perm())
-		}
-		if info.Mode().IsRegular() {
-			in, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer in.Close()
-			out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
-			if err != nil {
-				return err
-			}
-			defer out.Close()
-			_, err = io.Copy(out, in)
-			return err
-		}
-		// Symlinks / specials: skip (stacks is plain files).
-		return nil
-	})
 }

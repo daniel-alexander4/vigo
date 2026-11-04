@@ -18,59 +18,109 @@ import (
 // DefaultMaxVersions is the maximum number of config snapshots to keep.
 const DefaultMaxVersions = 20
 
-// SnapshotLive creates a tar.gz snapshot of the .live directory in the history
-// directory, named by timestamp. Prunes old snapshots beyond maxVersions.
-func SnapshotLive(liveDir, historyDir string, maxVersions int) (string, error) {
+// snapshotVersionFormat names snapshots. Nanosecond resolution plus an
+// O_EXCL create (with a counter on collision) keeps two snapshots taken in
+// the same second from overwriting one archive. Fixed width, so the names
+// sort chronologically as strings.
+const snapshotVersionFormat = "20060102T150405.000000000Z"
+
+// SnapshotTree writes a tar.gz snapshot of the publishable tree under
+// srcDir into historyDir and returns its version name. Publish snapshots
+// the staging tree it is about to sync (so a publish that cannot be
+// snapshotted never reaches .live); PublishFile snapshots .live after its
+// write. Hidden entries and root-level files atomicSync would not copy are
+// left out, so the archive is exactly what .live holds. The archive is
+// written to a temp name and renamed into place only after every writer
+// has closed cleanly — a truncated archive never appears as a version.
+// Prunes old snapshots beyond maxVersions.
+func SnapshotTree(srcDir, historyDir string, maxVersions int) (string, error) {
 	if maxVersions <= 0 {
 		maxVersions = DefaultMaxVersions
 	}
-
 	if err := os.MkdirAll(historyDir, 0o755); err != nil {
 		return "", fmt.Errorf("creating history dir: %w", err)
 	}
 
-	version := time.Now().UTC().Format("20060102T150405Z")
-	archivePath := filepath.Join(historyDir, version+".tar.gz")
-
-	f, err := os.Create(archivePath)
+	tmp, err := os.CreateTemp(historyDir, ".snapshot-*.tmp")
 	if err != nil {
 		return "", fmt.Errorf("creating archive: %w", err)
 	}
-	defer f.Close()
+	tmpPath := tmp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			os.Remove(tmpPath)
+		}
+	}()
 
-	gw := gzip.NewWriter(f)
-	defer gw.Close()
+	if err := writeTreeArchive(tmp, srcDir); err != nil {
+		tmp.Close()
+		return "", fmt.Errorf("creating archive: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return "", fmt.Errorf("closing archive: %w", err)
+	}
 
+	base := time.Now().UTC().Format(snapshotVersionFormat)
+	version := base
+	for i := 1; ; i++ {
+		final := filepath.Join(historyDir, version+".tar.gz")
+		// Link (not rename) so an existing archive is never replaced.
+		if err := os.Link(tmpPath, final); err == nil {
+			break
+		} else if !os.IsExist(err) {
+			return "", fmt.Errorf("committing archive: %w", err)
+		}
+		if i > 1000 {
+			return "", fmt.Errorf("committing archive: too many snapshots named %s", base)
+		}
+		version = fmt.Sprintf("%s-%d", base, i)
+	}
+	os.Remove(tmpPath)
+	committed = true
+
+	pruneSnapshots(historyDir, maxVersions)
+	return version, nil
+}
+
+// writeTreeArchive streams srcDir's publishable tree as tar.gz into w and
+// reports every writer's Close error.
+func writeTreeArchive(w io.Writer, srcDir string) error {
+	gw := gzip.NewWriter(w)
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
-
-	err = filepath.Walk(liveDir, func(path string, info os.FileInfo, err error) error {
+	walkErr := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-
-		rel, err := filepath.Rel(liveDir, path)
+		if path == srcDir {
+			return nil
+		}
+		rel, err := filepath.Rel(srcDir, path)
 		if err != nil {
 			return err
 		}
-		// Skip hidden dirs (like .publish-tmp-*)
-		if strings.HasPrefix(filepath.Base(path), ".") && path != liveDir {
+		// Skip hidden entries (.publish-tmp-*, .git, ...).
+		if strings.HasPrefix(filepath.Base(path), ".") {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-
+		// Root-level files atomicSync does not copy are not part of .live.
+		if !info.IsDir() && !strings.Contains(rel, string(filepath.Separator)) && !isPublishableFile(info.Name()) {
+			return nil
+		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			return nil // symlinks, devices: never part of a config snapshot
+		}
 		header, err := tar.FileInfoHeader(info, "")
 		if err != nil {
 			return err
 		}
-		header.Name = rel
-
+		header.Name = filepath.ToSlash(rel)
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}
-
 		if !info.IsDir() {
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -80,18 +130,15 @@ func SnapshotLive(liveDir, historyDir string, maxVersions int) (string, error) {
 				return err
 			}
 		}
-
 		return nil
 	})
-	if err != nil {
-		os.Remove(archivePath)
-		return "", fmt.Errorf("creating archive: %w", err)
+	if walkErr != nil {
+		return walkErr
 	}
-
-	// Prune old snapshots.
-	pruneSnapshots(historyDir, maxVersions)
-
-	return version, nil
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return gw.Close()
 }
 
 // ListVersions returns available config snapshot versions, newest first.
@@ -118,7 +165,26 @@ func ListVersions(historyDir string) ([]string, error) {
 
 // RollbackToVersion extracts a snapshot tarball into the .live directory,
 // replacing its contents.
+//
+// It holds the cross-process publish lock for the whole swap, so it can
+// never rename .live away in the middle of a publish's sync, and it
+// records the restored version as the live one.
 func RollbackToVersion(historyDir, version, liveDir string) error {
+	if version == "" || strings.ContainsAny(version, "/\\") || strings.HasPrefix(version, ".") {
+		return fmt.Errorf("invalid snapshot version %q", version)
+	}
+	unlock, err := lockPublish(liveDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if err := rollbackLocked(historyDir, version, liveDir); err != nil {
+		return err
+	}
+	return recordLiveVersion(liveDir, version)
+}
+
+func rollbackLocked(historyDir, version, liveDir string) error {
 	archivePath := filepath.Join(historyDir, version+".tar.gz")
 	if _, err := os.Stat(archivePath); err != nil {
 		return fmt.Errorf("snapshot %q not found", version)

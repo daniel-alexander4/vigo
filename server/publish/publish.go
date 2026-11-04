@@ -453,25 +453,27 @@ func rewriteStagingPath(p, stagingDir, stacksDir string) string {
 	return p
 }
 
-// Publish validates stacksd configs then atomically syncs them to .live.
-// After a successful sync, it snapshots .live for rollback support.
-//
-// The state parameter holds operator-controlled mutable publish state
-// (freeze deadline). A nil state bypasses the freeze check — used by the
-// CLI, which runs in a separate process and doesn't carry freeze
-// semantics across invocations. The server-side caller constructs a
-// *State once at startup and threads it through.
+// Publish validates stacks configs, snapshots the validated tree for
+// rollback support, then atomically syncs it to .live.
 //
 // Stacks is never modified. The atomic sync runs against the staging
 // directory ValidateSource produced (= stacks + linted modlint
 // overrides), so .live receives canonical bytes while the operator's
 // source files stay byte-stable.
-func Publish(opts Options, state *State) (*Result, error) {
-	if state.Frozen() {
-		return nil, fmt.Errorf("config publish is frozen until %s", state.FreezeUntilTime().Format(time.RFC3339))
-	}
-
+//
+// A publish freeze (SetFreeze, persisted under the server root) refuses
+// the publish. The whole publish holds the cross-process publish lock, so
+// it cannot interleave with another publish or with a rollback.
+func Publish(opts Options) (*Result, error) {
 	opts = opts.resolvePaths()
+	if err := checkFreeze(opts.LiveDir); err != nil {
+		return nil, err
+	}
+	unlock, err := lockPublish(opts.LiveDir)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 
 	res, err := ValidateSource(opts)
 	if err != nil {
@@ -521,10 +523,19 @@ func Publish(opts Options, state *State) (*Result, error) {
 		res.ChangedConfigcrateContent = ReadChangedConfigcrateContent(source, changedMods)
 	}
 
+	// Snapshot the tree about to land BEFORE touching .live: a publish that
+	// cannot be snapshotted never reaches the fleet, so every live tree has
+	// a snapshot and auto-rollback always has the right predecessor.
+	version, err := SnapshotTree(source, opts.HistoryDir, DefaultMaxVersions)
+	if err != nil {
+		return nil, fmt.Errorf("snapshotting config for rollback (nothing published): %w", err)
+	}
+
 	unlockLiveDir(opts.LiveDir)
 	files, err := atomicSync(source, opts.LiveDir)
 	if err != nil {
 		lockdownLiveDir(opts.LiveDir) // re-lock even on failure
+		os.Remove(filepath.Join(opts.HistoryDir, version+".tar.gz"))
 		return nil, fmt.Errorf("sync failed: %w", err)
 	}
 	res.Files = files
@@ -533,9 +544,9 @@ func Publish(opts Options, state *State) (*Result, error) {
 	// The server reads via the vigo group. Operators cannot write directly.
 	lockdownLiveDir(opts.LiveDir)
 
-	// Snapshot .live for rollback support.
-	_, _ = SnapshotLive(opts.LiveDir, opts.HistoryDir, DefaultMaxVersions)
-
+	if err := recordLiveVersion(opts.LiveDir, version); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 
@@ -1019,14 +1030,17 @@ func unlockLiveDir(live string) {
 // config tree, and syncs only that file to .live/. The file path must be
 // relative to the stacks directory (e.g., "configcrates/nginx.vgo").
 //
-// The state parameter holds operator-controlled mutable publish state
-// (freeze deadline). A nil state bypasses the freeze check — see Publish.
-func PublishFile(srcPath string, opts Options, state *State) (*Result, error) {
-	if state.Frozen() {
-		return nil, fmt.Errorf("config publish is frozen until %s", state.FreezeUntilTime().Format(time.RFC3339))
-	}
-
+// A publish freeze refuses it, and it holds the publish lock, as Publish.
+func PublishFile(srcPath string, opts Options) (*Result, error) {
 	opts = opts.resolvePaths()
+	if err := checkFreeze(opts.LiveDir); err != nil {
+		return nil, err
+	}
+	unlock, err := lockPublish(opts.LiveDir)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 
 	relPath, err := containedRelPath(opts.StacksDir, srcPath)
 	if err != nil {
@@ -1064,12 +1078,26 @@ func PublishFile(srcPath string, opts Options, state *State) (*Result, error) {
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
 		return nil, fmt.Errorf("creating target dir: %w", err)
 	}
+	prev, prevErr := os.ReadFile(destPath)
 	if err := os.WriteFile(destPath, data, 0o640); err != nil {
 		return nil, fmt.Errorf("writing %s: %w", relPath, err)
 	}
 
-	// Snapshot .live for rollback support, as Publish does.
-	_, _ = SnapshotLive(opts.LiveDir, opts.HistoryDir, DefaultMaxVersions)
+	// Snapshot .live for rollback support, as Publish does. A write that
+	// cannot be snapshotted is undone, so .live never holds a tree with no
+	// snapshot behind it.
+	version, err := SnapshotTree(opts.LiveDir, opts.HistoryDir, DefaultMaxVersions)
+	if err != nil {
+		if prevErr == nil {
+			_ = os.WriteFile(destPath, prev, 0o640)
+		} else {
+			os.Remove(destPath)
+		}
+		return nil, fmt.Errorf("snapshotting config for rollback (%s not published): %w", relPath, err)
+	}
+	if err := recordLiveVersion(opts.LiveDir, version); err != nil {
+		return nil, err
+	}
 
 	return &Result{
 		Configcrates: vres.Configcrates,
