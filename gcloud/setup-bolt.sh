@@ -14,10 +14,9 @@
 #   sudo SPANNER_ID=alexander4-test BOLT_PATTERNS='*.b.test' SPANNER_PEERS='10.0.0.2' bash /tmp/setup-bolt.sh
 set -euo pipefail
 
-AR_HOST=us-west1-docker.pkg.dev
-AR_IMAGE_REPO="${AR_HOST}/project-69f2499e-5082-48f0-b19/vigo/vigo"
+IMAGE_REPO="ghcr.io/daniel-alexander4/vigo"
 VERSION="$(cat /tmp/vigo-version 2>/dev/null || echo latest)"
-IMAGE="${IMAGE:-${AR_IMAGE_REPO}:${VERSION}}"
+IMAGE="${IMAGE:-${IMAGE_REPO}:${VERSION}}"
 DATA=/srv/vigo
 SPANNER_ID="${SPANNER_ID:-alexander4-test}"
 BOLT_PATTERNS="${BOLT_PATTERNS:?set BOLT_PATTERNS, e.g. '*.a.test'}"
@@ -57,11 +56,8 @@ hostnamectl set-hostname "$SHORT_HOST"
 mkdir -p /etc/cloud/cloud.cfg.d
 echo 'preserve_hostname: true' > /etc/cloud/cloud.cfg.d/99-vigo-preserve-hostname.cfg
 
-echo "== Authenticate Docker to Artifact Registry =="
-TOKEN=$(curl -s -H "Metadata-Flavor: Google" \
-  "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
-  | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
-echo "$TOKEN" | docker login -u oauth2accesstoken --password-stdin "https://$AR_HOST"
+echo "== Pull ${IMAGE} (public on ghcr.io, no login) =="
+docker pull "$IMAGE"
 
 echo "== Seed config (no server start) =="
 mkdir -p "$DATA" /var/lib/vigo/swarm

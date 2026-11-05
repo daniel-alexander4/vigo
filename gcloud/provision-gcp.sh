@@ -2,7 +2,7 @@
 # Stand up AND provision the GCP held-stream load-test environment, end to end:
 #   - ensures firewall + Cloud NAT on vigo-vpc
 #   - creates vigo-srv (8 vCPU/32 GiB) + vigo-test-harness (8 vCPU/48 GiB),
-#     both --no-address (egress via NAT; Artifact Registry via Private Google Access)
+#     both --no-address (egress via Cloud NAT, which also reaches ghcr.io)
 #   - auto-detects the server version from the repo VERSION file
 #   - builds the fakefleet + vigocli harness binaries
 #   - scp's the setup scripts, harness binaries, and a version marker to each VM
@@ -20,8 +20,9 @@
 # laptop). The harness always reaches the server over the internal subnet, so
 # this is purely for UI access. Idempotent; re-running refreshes the source IP.
 #
-# Prereq: the server image must already be in Artifact Registry at the repo's
-# VERSION — run ./push2AR.sh first. This script checks and fails early if not.
+# Prereq: the server image must already be on ghcr.io/daniel-alexander4/vigo at
+# the repo's VERSION — publish it with `sudo scripts/upgrade.sh full --push`.
+# This script checks and fails early if not.
 #
 # Tear down:
 #   gcloud compute instances delete vigo-srv vigo-test-harness --zone=us-west1-a
@@ -35,7 +36,7 @@ NETWORK=vigo-vpc
 SUBNET=vigo-subnet
 IMAGE_FAMILY=ubuntu-2404-lts-amd64
 IMAGE_PROJECT=ubuntu-os-cloud
-AR_IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/vigo/vigo"
+IMAGE_REPO="ghcr.io/daniel-alexander4/vigo"
 
 # Server machine type. Default is the 8 vCPU / 32 GiB anchor box; override to
 # validate the linear capacity model on other sizes, e.g.
@@ -135,11 +136,20 @@ ensure_server_external_ip() {
 # --- Version + image preflight ------------------------------------------------
 VERSION="$(tr -d '[:space:]' < "${REPO_ROOT}/VERSION")"
 [ -n "$VERSION" ] || { echo "empty VERSION at ${REPO_ROOT}/VERSION" >&2; exit 1; }
-IMAGE="${AR_IMAGE_REPO}:${VERSION}"
+# The published image is public on GitHub's registry, so an anonymous manifest
+# request answers whether this VERSION has been pushed.
+ghcr_has_tag() {
+  local t
+  t=$(curl -fsS "https://ghcr.io/token?scope=repository:daniel-alexander4/vigo:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+  [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${t}" \
+    -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json' \
+    "https://ghcr.io/v2/daniel-alexander4/vigo/manifests/$1")" = 200 ]
+}
+IMAGE="${IMAGE_REPO}:${VERSION}"
 echo "== Server version ${VERSION} (image ${IMAGE}) =="
-g artifacts docker images describe "${IMAGE}" >/dev/null 2>&1 || {
-  echo "  ! ${IMAGE} is not in Artifact Registry. Build + push it first:" >&2
-  echo "      cd ${REPO_ROOT} && ./push2AR.sh" >&2
+ghcr_has_tag "${VERSION}" || {
+  echo "  ! ${IMAGE} is not on ghcr.io. Build + push it first:" >&2
+  echo "      cd ${REPO_ROOT} && sudo scripts/upgrade.sh full --push" >&2
   exit 1
 }
 

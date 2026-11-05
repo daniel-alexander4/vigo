@@ -28,9 +28,18 @@ scp_iap() { local s=$1 vm=$2 t=0; until g compute scp "$s" "${vm}:/tmp/" --zone=
 ssh_iap() { g compute ssh "$1" --zone="$ZONE" --tunnel-through-iap --quiet --command="$2"; }
 
 VERSION="$(tr -d '[:space:]' < "${REPO_ROOT}/VERSION")"
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/vigo/vigo:${VERSION}"
+# The published image is public on GitHub's registry, so an anonymous manifest
+# request answers whether this VERSION has been pushed.
+ghcr_has_tag() {
+  local t
+  t=$(curl -fsS "https://ghcr.io/token?scope=repository:daniel-alexander4/vigo:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+  [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${t}" \
+    -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json' \
+    "https://ghcr.io/v2/daniel-alexander4/vigo/manifests/$1")" = 200 ]
+}
+IMAGE="ghcr.io/daniel-alexander4/vigo:${VERSION}"
 echo "== Version ${VERSION} (image ${IMAGE}) =="
-g artifacts docker images describe "${IMAGE}" >/dev/null 2>&1 || { echo "  ! ${IMAGE} not in AR — run ./push2AR.sh first" >&2; exit 1; }
+ghcr_has_tag "${VERSION}" || { echo "  ! ${IMAGE} not on ghcr.io — run sudo scripts/upgrade.sh full --push first" >&2; exit 1; }
 
 echo "== Build harness binaries (incl. --hostname-suffix fakefleet) =="
 ( cd "$REPO_ROOT" && CGO_ENABLED=0 go build -o /tmp/vigo-fakefleet ./test/fakefleet )

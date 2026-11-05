@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Set up vigo-srv: install Docker, authenticate to Artifact Registry, set a
+# Set up vigo-srv: install Docker, pull the image from ghcr.io, set a
 # short hostname, seed config, tune server.yaml (max_concurrent, 1s check-in,
 # server.hostname), run vigosrv, and publish the demo fakefleet config tree
 # (<stage>/demo-stacks → configcrates/roles/usercrates/hostcrates) so synthetic
@@ -18,7 +18,7 @@
 #
 # Version auto-detection: the tag comes from <stage>/vigo-version (written by
 # provision-gcp.sh from the repo VERSION). It falls back to `latest` only if
-# that marker is absent — and AR `latest` may be stale, so prefer the marker.
+# that marker is absent — and `latest` may not match the repo, so prefer the marker.
 set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "run as root (sudo)" >&2; exit 1; }
@@ -40,10 +40,9 @@ if [ -e "$STAGE_DIR" ]; then
   fi
 fi
 
-AR_HOST=us-west1-docker.pkg.dev
-AR_IMAGE_REPO="${AR_HOST}/project-69f2499e-5082-48f0-b19/vigo/vigo"
+IMAGE_REPO="ghcr.io/daniel-alexander4/vigo"
 VERSION="$(cat "${STAGE_DIR}/vigo-version" 2>/dev/null || echo latest)"
-IMAGE="${IMAGE:-${AR_IMAGE_REPO}:${VERSION}}"
+IMAGE="${IMAGE:-${IMAGE_REPO}:${VERSION}}"
 DATA=/srv/vigo
 # 0 = the CPU-scaled default (max(128, GOMAXPROCS*16)) — the check-in admission
 # governor that protects CPU/UI by shedding excess bundle-builds. Representative
@@ -103,11 +102,8 @@ mkdir -p /etc/cloud/cloud.cfg.d
 echo 'preserve_hostname: true' > /etc/cloud/cloud.cfg.d/99-vigo-preserve-hostname.cfg
 echo "  hostname set to ${SHORT_HOST}"
 
-echo "== Authenticate Docker to Artifact Registry (VM service-account token) =="
-TOKEN=$(curl -s -H "Metadata-Flavor: Google" \
-  "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
-  | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
-echo "$TOKEN" | docker login -u oauth2accesstoken --password-stdin "https://$AR_HOST"
+echo "== Pull ${IMAGE} (public on ghcr.io, no login) =="
+docker pull "$IMAGE"
 
 echo "== Seed config (no server start) =="
 # Mount /host-bin so the seed pass installs vigocli onto the host — we need it
