@@ -8,17 +8,28 @@ Vigo is open source under the [Apache License 2.0](LICENSE). Every feature is in
 
 ## Quickstart
 
-### 1. Build and start the server
+### 1. Start the server
 
-Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker. The host needs Docker with the Compose and Buildx plugins, plus `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
+Pull the published server image and start it. The host needs Docker with the Compose plugin and an x86_64 CPU; on Ubuntu, `sudo apt-get install -y docker.io docker-compose-v2` installs them.
+
+```bash
+sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
+sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest   # the name the compose file runs
+sudo mkdir -p /srv/vigo
+sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
+cd /srv/vigo && sudo docker compose up -d
+```
+
+The published image is signed with the project's release key, so envoys update their agent on their own when you move to a newer image. It carries the Linux agent for amd64 and arm64. To pin a release, use its version tag, such as `:0.77.0`, in place of `:latest`.
+
+To build the image from source instead, the host also needs the Buildx plugin, `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
 go run ./server/hardening/cmd/sign -genkey -output signing.key   # optional: lets envoys self-update
-sudo scripts/upgrade.sh full --norun   # builds the server image and the amd64 agent
-IMAGE=vigo:latest   # the local image tag
+sudo scripts/upgrade.sh full --norun   # builds the server image (tagged vigo:latest) and the amd64 agent
 sudo mkdir -p /srv/vigo
-sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
 cd /srv/vigo && sudo docker compose up -d
 ```
 

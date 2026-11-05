@@ -15,7 +15,17 @@ Vigo has three components: the server (`vigosrv`), the CLI (`vigocli`), and the 
 
 ### 1. Seed the data directory
 
-Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker. The host needs Docker with the Compose and Buildx plugins, plus `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
+You can pull the published server image or build it yourself. Either way the image ends up tagged `vigo:latest`, the name the generated compose file runs.
+
+**Pull the published image.** This is the quick path. The host needs Docker with the Compose plugin and an x86_64 CPU; on Ubuntu, `sudo apt-get install -y docker.io docker-compose-v2` installs them. The image is signed with the project's release key, so envoys update their agent on their own when you move to a newer image. It carries the Linux agent for amd64 and arm64. To pin a release, use its version tag, such as `:0.77.0`, in place of `:latest`.
+
+```bash
+sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
+sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest
+IMAGE=vigo:latest
+```
+
+**Or build it from source.** The build runs inside Docker. The host needs Docker with the Compose and Buildx plugins, plus `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
@@ -133,7 +143,17 @@ Edit `server.yaml` for server settings (check-in interval, TLS paths, spanner fe
 
 ### Upgrading
 
-From your source checkout, rebuild the image and redeploy in one step:
+With the published image, pull the new release, tag it, and recreate the containers:
+
+```bash
+sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
+sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest
+cd /srv/vigo && sudo docker compose down
+sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
+sudo docker compose up -d
+```
+
+From a source checkout, rebuild the image and redeploy in one step:
 
 ```bash
 sudo scripts/upgrade.sh full
@@ -146,7 +166,7 @@ sudo scripts/upgrade.sh full --norun
 sudo scripts/upgrade.sh deploy
 ```
 
-Use `upgrade.sh deploy` rather than a plain `docker compose up -d` here. On every start, the `vigo` container rewrites `/srv/vigo/docker-compose.yml` from the image it runs, so while a container from the old image exists, the file on disk can still be the old one, and the `guacd` sidecar would be created from it. `deploy` stops the old containers before it writes the file.
+Don't upgrade with a plain `docker compose up -d`. On every start, the `vigo` container rewrites `/srv/vigo/docker-compose.yml` from the image it runs, so while a container from the old image exists, the file on disk can still be the old one, and the `guacd` sidecar would be created from it. The `docker compose down` above, and `upgrade.sh deploy`, stop the old containers before the new file is written.
 
 Your config, database, secrets, and TLS certs persist in `/srv/vigo/` across upgrades.
 

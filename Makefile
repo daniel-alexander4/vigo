@@ -287,7 +287,7 @@ certs:
 ENVFILE ?= /srv/vigo/.env
 
 IMAGE ?= vigo:latest
-REGISTRY_IMAGE ?= us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
+REGISTRY_IMAGE ?= ghcr.io/daniel-alexander4/vigo:latest
 
 push-image:
 	docker build -f Dockerfile.server -t $(IMAGE) .

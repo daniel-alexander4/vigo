@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:296eed1d330228e185a10b33f14ffaed204a6830e277072d349911dacf6e56ab -->
+<!-- vigo-i18n source_sha:982a0113345063d90aa2ab7d9e1164dfacdec55c9e7ed8a6d39aaced45c10bfc -->
 
 # Installer le serveur Vigo
 
@@ -16,7 +16,17 @@ Vigo comporte trois composants : le serveur (`vigosrv`), la CLI (`vigocli`) et l
 
 ### 1. Initialiser le répertoire de données
 
-Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker. L'hôte a besoin de Docker avec les plugins Compose et Buildx, ainsi que de `git` et `rsync` ; sous Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` les installe. La première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
+Vous pouvez récupérer l'image publiée du serveur ou la compiler vous-même. Dans les deux cas, l'image porte le tag `vigo:latest`, le nom qu'exécute le fichier compose généré.
+
+**Récupérer l'image publiée.** C'est la voie rapide. L'hôte a besoin de Docker avec le plugin Compose et d'un processeur x86_64 ; sous Ubuntu, `sudo apt-get install -y docker.io docker-compose-v2` les installe. L'image est signée avec la clé de publication du projet : les envoys mettent donc à jour leur agent d'eux-mêmes lorsque vous passez à une image plus récente. Elle contient l'agent Linux pour amd64 et arm64. Pour figer une version, utilisez son tag de version, par exemple `:0.77.0`, à la place de `:latest`.
+
+```bash
+sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
+sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest
+IMAGE=vigo:latest
+```
+
+**Ou la compiler depuis les sources.** La compilation s'exécute dans Docker. L'hôte a besoin de Docker avec les plugins Compose et Buildx, ainsi que de `git` et `rsync` ; sous Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` les installe. La première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo
@@ -134,7 +144,17 @@ TZ=America/New_York
 
 ### Mise à niveau
 
-Depuis votre copie des sources, recompilez l'image et redéployez en une seule étape :
+Avec l'image publiée, récupérez la nouvelle version, appliquez le tag, puis recréez les conteneurs :
+
+```bash
+sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
+sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest
+cd /srv/vigo && sudo docker compose down
+sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
+sudo docker compose up -d
+```
+
+Depuis une copie des sources, recompilez l'image et redéployez en une seule étape :
 
 ```bash
 sudo scripts/upgrade.sh full
@@ -147,7 +167,7 @@ sudo scripts/upgrade.sh full --norun
 sudo scripts/upgrade.sh deploy
 ```
 
-Utilisez ici `upgrade.sh deploy` plutôt qu'un simple `docker compose up -d`. À chaque démarrage, le conteneur `vigo` réécrit `/srv/vigo/docker-compose.yml` à partir de l'image qu'il exécute : tant qu'un conteneur de l'ancienne image existe, le fichier sur disque peut encore être l'ancien, et le conteneur annexe `guacd` serait créé à partir de celui-ci. `deploy` arrête les anciens conteneurs avant d'écrire le fichier.
+Ne faites pas la mise à niveau avec un simple `docker compose up -d`. À chaque démarrage, le conteneur `vigo` réécrit `/srv/vigo/docker-compose.yml` à partir de l'image qu'il exécute : tant qu'un conteneur de l'ancienne image existe, le fichier sur disque peut encore être l'ancien, et le conteneur annexe `guacd` serait créé à partir de celui-ci. Le `docker compose down` ci-dessus, comme `upgrade.sh deploy`, arrête les anciens conteneurs avant que le nouveau fichier soit écrit.
 
 Votre configuration, votre base de données, vos secrets et vos certificats TLS persistent dans `/srv/vigo/` à travers les mises à niveau.
 

@@ -1,10 +1,20 @@
 # Quickstart
 
-Stand up the Vigo server, enroll your first envoy, and apply your first configcrate. About ten minutes of copy-paste once the image is built. If you'd rather be walked through it step by step, take the [tutorials](start/) instead — same path, more explanation.
+Stand up the Vigo server, enroll your first envoy, and apply your first configcrate. About ten minutes of copy-paste with the published image. If you'd rather be walked through it step by step, take the [tutorials](start/) instead — same path, more explanation.
 
 ## 1. Start the server
 
-Prebuilt images are not published yet, so build the server image from source first. The build runs inside Docker. The host needs Docker with the Compose and Buildx plugins, plus `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
+You can pull the published server image or build it yourself. Either way the image ends up tagged `vigo:latest`, the name the generated compose file runs.
+
+**Pull the published image.** This is the quick path. The host needs Docker with the Compose plugin and an x86_64 CPU; on Ubuntu, `sudo apt-get install -y docker.io docker-compose-v2` installs them. The image is signed with the project's release key, so envoys update their agent on their own when you move to a newer image. It carries the Linux agent for amd64 and arm64. To pin a release, use its version tag, such as `:0.77.0`, in place of `:latest`.
+
+```bash
+sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
+sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest
+IMAGE=vigo:latest
+```
+
+**Or build it from source.** The build runs inside Docker. The host needs Docker with the Compose and Buildx plugins, plus `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo

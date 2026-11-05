@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:e081d86327e66a2dc7f48c0d237fb2f3bee2893388f4233628565e27afcf2492 -->
+<!-- vigo-i18n source_sha:ebfb65bb82ea3b5deacf6d037dadd59d66c6027325fff1a09e01e73c32bc21f8 -->
 
 # Migrer depuis une version sous licence de Vigo
 
@@ -10,12 +10,14 @@ Le serveur actuel refuse de démarrer si `server.yaml` contient encore une clé 
 
 - [ ] Faites une sauvegarde : `sudo vigocli backup create /root/vigo-pre-migration.tar.gz --encrypt` (sans `--encrypt`, l'archive n'inclut pas la clé maîtresse des secrets), ou copiez `/srv/vigo/` serveur arrêté. Voir [Sauvegarde et restauration](../operate/backup-and-recovery.md).
 - [ ] Gardez une copie de votre fichier `.lic` hors de `/srv/vigo/` si vous voulez en conserver une trace. Vigo ne le lit plus.
-- [ ] Installez Docker, Go 1.25 et une chaîne d'outils Rust sur l'hôte du serveur. Aucune image précompilée n'est encore publiée : vous compilez l'image depuis les sources.
+- [ ] Vérifiez que l'hôte du serveur dispose de Docker avec le plugin Compose. Compiler depuis les sources plutôt que de récupérer l'image publiée demande en plus le plugin Buildx, `git` et `rsync`.
 
-## Compiler la nouvelle version
+## Obtenir la nouvelle version
 
-- [ ] Clonez les sources : `git clone https://github.com/daniel-alexander4/vigo.git && cd vigo`
-- [ ] Compilez sans déployer : `sudo scripts/upgrade.sh full --norun`. Ajoutez `arm64` (`sudo scripts/upgrade.sh full arm64 --norun`) si vous avez des envoys arm64. Cette étape installe aussi le nouveau `vigocli` sur l'hôte.
+Récupérez l'image publiée ou compilez-la depuis les sources, l'un ou l'autre.
+
+- [ ] Pour la récupérer : `sudo docker pull ghcr.io/daniel-alexander4/vigo:latest`, puis `sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest`. Elle contient l'agent Linux pour amd64 et arm64. Installez son `vigocli` sur l'hôte : `id=$(sudo docker create vigo:latest) && sudo docker cp "$id":/usr/local/bin/vigocli /usr/local/bin/vigocli && sudo docker rm "$id"`.
+- [ ] Pour la compiler : clonez les sources (`git clone https://github.com/daniel-alexander4/vigo.git && cd vigo`) et compilez sans déployer : `sudo scripts/upgrade.sh full --norun`. Ajoutez `arm64` (`sudo scripts/upgrade.sh full arm64 --norun`) si vous avez des envoys arm64. Cette étape installe aussi le nouveau `vigocli` sur l'hôte.
 
 ## Nettoyer server.yaml
 
@@ -26,7 +28,7 @@ Le serveur actuel refuse de démarrer si `server.yaml` contient encore une clé 
 
 ## Déployer
 
-- [ ] Déployez l'image compilée : `sudo scripts/upgrade.sh deploy`. Préférez cette commande à un simple `docker compose up -d` : l'ancien conteneur réécrit `docker-compose.yml` à partir de sa propre image lorsqu'il redémarre.
+- [ ] Déployez la nouvelle image. Avec une copie des sources, lancez `sudo scripts/upgrade.sh deploy`. Avec l'image récupérée, lancez `cd /srv/vigo && sudo docker compose down`, puis `sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only`, puis `sudo docker compose up -d`. N'utilisez pas un simple `docker compose up -d` seul : l'ancien conteneur réécrit `docker-compose.yml` à partir de sa propre image lorsqu'il redémarre.
 - [ ] Suivez le premier démarrage : `docker logs -f vigo`. Les migrations de la base s'exécutent avant que le serveur affiche `server ready` et peuvent prendre plusieurs minutes sur une grosse base. Le conteneur apparaît « unhealthy » jusqu'à la fin ; laissez-le tourner.
 - [ ] Vérifiez que le serveur répond : `curl -sk https://127.0.0.1:8443/healthz` renvoie `200`.
 

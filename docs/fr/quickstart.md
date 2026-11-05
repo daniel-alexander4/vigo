@@ -1,12 +1,22 @@
-<!-- vigo-i18n source_sha:31c8b1016831110e864d52498f7aa7b2abf0904b93737d2149f71cbfac24a17d -->
+<!-- vigo-i18n source_sha:eea8dc8fa879743ff9249f21fc70184c3f0291ff3d7489b7baa7bc4d02e4dbca -->
 
 # Démarrage rapide
 
-Mettez en route le serveur Vigo, enrôlez votre premier Envoy et appliquez votre premier configcrate. Une dizaine de minutes de copier-coller une fois l'image compilée. Si vous préférez être guidé pas à pas, suivez plutôt les [tutoriels](start/) — même parcours, plus d'explications.
+Mettez en route le serveur Vigo, enrôlez votre premier Envoy et appliquez votre premier configcrate. Une dizaine de minutes de copier-coller avec l'image publiée. Si vous préférez être guidé pas à pas, suivez plutôt les [tutoriels](start/) — même parcours, plus d'explications.
 
 ## 1. Démarrer le serveur
 
-Aucune image précompilée n'est encore publiée : compilez d'abord l'image du serveur depuis les sources. La compilation s'exécute dans Docker. L'hôte a besoin de Docker avec les plugins Compose et Buildx, ainsi que de `git` et `rsync` ; sous Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` les installe. La première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
+Vous pouvez récupérer l'image publiée du serveur ou la compiler vous-même. Dans les deux cas, l'image porte le tag `vigo:latest`, le nom qu'exécute le fichier compose généré.
+
+**Récupérer l'image publiée.** C'est la voie rapide. L'hôte a besoin de Docker avec le plugin Compose et d'un processeur x86_64 ; sous Ubuntu, `sudo apt-get install -y docker.io docker-compose-v2` les installe. L'image est signée avec la clé de publication du projet : les envoys mettent donc à jour leur agent d'eux-mêmes lorsque vous passez à une image plus récente. Elle contient l'agent Linux pour amd64 et arm64. Pour figer une version, utilisez son tag de version, par exemple `:0.77.0`, à la place de `:latest`.
+
+```bash
+sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
+sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest
+IMAGE=vigo:latest
+```
+
+**Ou la compiler depuis les sources.** La compilation s'exécute dans Docker. L'hôte a besoin de Docker avec les plugins Compose et Buildx, ainsi que de `git` et `rsync` ; sous Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` les installe. La première compilation prend environ 20 minutes. La clé de signature, facultative, permet aux envoys de mettre à jour leur agent d'eux-mêmes ; sans elle, chaque mise à niveau oblige à relancer le bootstrap sur chaque envoy. Sa création demande Go 1.25, et la clé doit être conservée en lieu sûr.
 
 ```bash
 git clone https://github.com/daniel-alexander4/vigo.git && cd vigo

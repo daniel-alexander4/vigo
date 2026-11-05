@@ -137,6 +137,11 @@ RUN --mount=type=secret,id=signing_key,target=/run/secrets/signing_key \
 
 FROM alpine:3.21
 
+# Links the published image (ghcr.io/daniel-alexander4/vigo) to its source repo.
+LABEL org.opencontainers.image.source="https://github.com/daniel-alexander4/vigo" \
+      org.opencontainers.image.description="Vigo server: vigosrv, vigocli and the Linux agent" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
 RUN apk add --no-cache ca-certificates libarchive-tools \
     weasyprint ttf-liberation font-dejavu
 

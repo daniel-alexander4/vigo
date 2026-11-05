@@ -56,9 +56,9 @@ set -euo pipefail
 DATA_DIR="/srv/vigo"
 # The local image name: what the build tags and docker-compose.yml runs.
 IMAGE="vigo:latest"
-# Where --push sends it (the maintainer's private registry; override with
+# Where --push sends it: the public image the install docs pull (override with
 # VIGO_REGISTRY_IMAGE to push elsewhere). Pushed as :latest and :<VERSION>.
-REGISTRY_IMAGE="${VIGO_REGISTRY_IMAGE:-us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo}"
+REGISTRY_IMAGE="${VIGO_REGISTRY_IMAGE:-ghcr.io/daniel-alexander4/vigo}"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Run as root: sudo $0" >&2

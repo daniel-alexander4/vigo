@@ -8,12 +8,14 @@ The current server refuses to start if `server.yaml` still contains a key it doe
 
 - [ ] Take a backup: `sudo vigocli backup create /root/vigo-pre-migration.tar.gz --encrypt` (without `--encrypt` the archive leaves out the secrets master key), or copy `/srv/vigo/` while the server is stopped. See [Backup and recovery](../operate/backup-and-recovery.md).
 - [ ] Keep a copy of your `.lic` file somewhere outside `/srv/vigo/` if you want a record of it. Vigo no longer reads it.
-- [ ] Install Docker, Go 1.25 and a Rust toolchain on the server host. Prebuilt images are not published yet, so you build the image from source.
+- [ ] Make sure the server host has Docker with the Compose plugin. Building from source instead of pulling the published image also needs the Buildx plugin, `git` and `rsync`.
 
-## Build the new release
+## Get the new release
 
-- [ ] Clone the source: `git clone https://github.com/daniel-alexander4/vigo.git && cd vigo`
-- [ ] Build without deploying: `sudo scripts/upgrade.sh full --norun`. Add `arm64` (`sudo scripts/upgrade.sh full arm64 --norun`) if you have arm64 envoys. This also installs the new `vigocli` on the host.
+Pull the published image, or build it from source. Do one or the other.
+
+- [ ] To pull it: `sudo docker pull ghcr.io/daniel-alexander4/vigo:latest`, then `sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest`. It carries the Linux agent for amd64 and arm64. Install its `vigocli` on the host: `id=$(sudo docker create vigo:latest) && sudo docker cp "$id":/usr/local/bin/vigocli /usr/local/bin/vigocli && sudo docker rm "$id"`.
+- [ ] To build it: clone the source (`git clone https://github.com/daniel-alexander4/vigo.git && cd vigo`) and build without deploying: `sudo scripts/upgrade.sh full --norun`. Add `arm64` (`sudo scripts/upgrade.sh full arm64 --norun`) if you have arm64 envoys. This also installs the new `vigocli` on the host.
 
 ## Clean up server.yaml
 
@@ -24,7 +26,7 @@ The current server refuses to start if `server.yaml` still contains a key it doe
 
 ## Deploy
 
-- [ ] Deploy the image you built: `sudo scripts/upgrade.sh deploy`. Use this rather than a plain `docker compose up -d`, because the old container rewrites `docker-compose.yml` from its own image when it restarts.
+- [ ] Deploy the new image. With a source checkout, run `sudo scripts/upgrade.sh deploy`. With the pulled image, run `cd /srv/vigo && sudo docker compose down`, then `sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only`, then `sudo docker compose up -d`. Don't use a plain `docker compose up -d` on its own, because the old container rewrites `docker-compose.yml` from its own image when it restarts.
 - [ ] Watch the first start: `docker logs -f vigo`. Database migrations run before the server reports `server ready`, and on a large database they can take several minutes. The container shows as unhealthy until they finish; let it run.
 - [ ] Confirm the server answers: `curl -sk https://127.0.0.1:8443/healthz` returns `200`.
 

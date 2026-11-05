@@ -1,8 +1,10 @@
-# Production compose — runs the locally built image vigo:latest.
+# Production compose — runs the local image vigo:latest.
 #
-# Images are not published. Build the image locally first
-# (`sudo scripts/upgrade.sh full --norun`, which tags it vigo:latest), then
-# seed and start — see README.md "Quickstart":
+# Get that image by pulling the published one and tagging it
+#   sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
+#   sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest
+# or by building it (`sudo scripts/upgrade.sh full --norun`, which tags it
+# vigo:latest). Then seed and start — see README.md "Quickstart":
 #   sudo mkdir -p /srv/vigo
 #   docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
 #   cd /srv/vigo && docker compose up -d
@@ -15,8 +17,9 @@
 services:
   vigo:
     image: vigo:latest
-    # Local build only: never try to pull this name from a registry. A missing
-    # image is then a clear "no such image" rather than a pull from Docker Hub.
+    # Never try to pull this name from a registry: it is a local tag (pulled
+    # and re-tagged, or built). A missing image is then a clear "no such
+    # image" rather than a pull from Docker Hub.
     pull_policy: never
     container_name: vigo
     restart: unless-stopped
