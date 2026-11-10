@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:19728ec32e2cac60ec0917db15878cb7144d2fc39cce60a2b665a91d9a4078e0 -->
+<!-- vigo-i18n source_sha:904dcf97caf262a186c3847eb1f8e346fb06e839d967433665e79f2c40673b17 -->
 
 # Démarrage rapide
 
@@ -28,25 +28,27 @@ IMAGE=vigo:latest   # le tag que la compilation donne à l'image locale
 ```bash
 sudo mkdir -p /srv/vigo
 sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo sed -i "s|^  # hostname: .*|  hostname: $(hostname)|" /srv/vigo/server.yaml
 cd /srv/vigo
 sudo docker compose up -d
 ```
 
-`--seed-only` écrit `/srv/vigo/docker-compose.yml`, `server.yaml`, `.env` et des configurations d'exemple, puis se termine. `docker compose up -d` démarre le serveur, qui génère son autorité de certification et ses certificats TLS sous `/srv/vigo/tls/` au premier démarrage. REST + interface Web sur `https://localhost:8443`, gRPC sur `localhost:1530`.
+`--seed-only` écrit `/srv/vigo/docker-compose.yml`, `server.yaml`, `.env` et des configurations d'exemple, puis se termine. La ligne `sed` définit `server.hostname` dans `server.yaml` sur le nom de cet hôte, dont le serveur a besoin pour trouver son propre agent lorsque vous créez votre connexion admin ; vous pouvez aussi modifier le fichier à la main avant le démarrage. `docker compose up -d` démarre le serveur, qui génère son autorité de certification et ses certificats TLS sous `/srv/vigo/tls/` au premier démarrage. REST + interface Web sur `https://localhost:8443`, gRPC sur `localhost:1530`.
 
 `docker run` unique si vous ne voulez pas de compose :
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run -d --name vigo \
+sudo docker run -d --name vigo \
   --network host \
   -v /srv/vigo:/srv/vigo \
+  -v /usr/local/bin:/host-bin \
   "$IMAGE"
 ```
 
-`--network host` lie 8443 (REST/UI), 1530 (gRPC) et 1531 (Swarm) directement sur l'hôte — correspondant au compose généré, qui place le serveur sur le réseau de l'hôte afin que le trafic des agents ne passe pas par le proxy userland par port de Docker. (Le sidecar `guacd` de Scrier n'est pas démarré par ce `docker run` nu ; utilisez compose si vous avez besoin de sessions Scrier RDP/VNC.)
+`--network host` lie 8443 (REST/UI), 1530 (gRPC) et 1531 (Swarm) directement sur l'hôte — correspondant au compose généré, qui place le serveur sur le réseau de l'hôte afin que le trafic des agents ne passe pas par le proxy userland par port de Docker. Le montage `/host-bin` permet au conteneur d'installer `vigocli` sur l'hôte. (Le sidecar `guacd` de Scrier n'est pas démarré par ce `docker run` nu ; utilisez compose si vous avez besoin de sessions Scrier RDP/VNC.)
 
-Ouvrez `https://localhost:8443` et acceptez le certificat auto-signé. Il n'existe pas de connexion admin par défaut : créez la vôtre après l'étape suivante, comme décrit dans [Installer](howto/operate/install.md#2-démarrer-le-serveur).
+Ouvrez `https://localhost:8443` et acceptez le certificat auto-signé. Il n'existe pas de connexion admin par défaut : vous créez la vôtre à l'étape 3, une fois l'agent propre au serveur enrôlé.
 
 ## 2. Enrôler des Envoys
 
@@ -69,7 +71,21 @@ Le script de bootstrap installe également le service propre à l'OS (systemd / 
 
 Après l'enrôlement, chaque Envoy apparaît dans le tableau de bord à `https://localhost:8443/envoys` et fait un check-in à l'intervalle défini par `checkin.interval` dans `server.yaml`.
 
-## 3. Écrire un configcrate
+## 3. Créer votre connexion
+
+Les connexions admin correspondent à de véritables comptes de l'hôte du serveur : le compte doit avoir un shell de connexion et une clé publique SSH dans `~/.ssh/id_ed25519.pub` ou `id_rsa.pub` (créez-en une avec `ssh-keygen -t ed25519` en tant que cet utilisateur s'il n'en a pas). Le serveur vérifie le compte d'après ce que remonte son propre agent, en se servant du `server.hostname` défini à l'étape 1. Initialisez le coffre à secrets, puis créez l'admin ; `webusers create` demande le mot de passe de connexion.
+
+```bash
+sudo vigocli secrets init          # sets the vault passphrase
+sudo vigocli secrets unlock
+sudo vigocli webusers create --username <you> --role admin
+```
+
+Le serveur vérifie le compte d'après la liste des comptes que l'agent a remontée en dernier. Si `webusers create` indique que l'agent n'a pas encore fait de remontée, ou que le compte n'est pas un utilisateur humain parce que vous l'avez créé après l'étape 2, attendez le prochain check-in de l'agent (jusqu'à environ cinq minutes) et relancez la commande.
+
+Connectez-vous à `https://localhost:8443/login` en tant que `<you>`.
+
+## 4. Écrire un configcrate
 
 ```yaml
 # /srv/vigo/stacks/configcrates/motd.vgo
@@ -78,6 +94,7 @@ resources:
   - name: motd-file
     type: file
     target_path: /etc/motd
+    state: present
     content: |
       ========================================
       Managed by Vigo
@@ -89,16 +106,18 @@ resources:
     mode: "0644"
 ```
 
-## 4. Affecter le configcrate aux Envoys
+## 5. Affecter le configcrate aux Envoys
 
-L'affectation la plus simple — chaque Envoy le reçoit :
+Un Envoy ne reçoit de configuration que lorsqu'une entrée d'un hostcrate correspond à son nom d'hôte. Le hostcrate le plus simple donne le configcrate à chaque Envoy :
 
 ```yaml
-# /srv/vigo/stacks/common.vgo
-configcrates: [motd]
+# /srv/vigo/stacks/envoys.vgo
+envoys:
+  - match: "*"
+    configcrates: [motd]
 ```
 
-Pour une affectation par hôte, utilisez un hostcrate :
+Pour une affectation par hôte, placez des entrées plus précises au-dessus de l'entrée générique ; la première correspondance l'emporte. Dans cet exemple, `nginx` et `postgres` désignent des configcrates que vous avez écrits vous-même :
 
 ```yaml
 # /srv/vigo/stacks/envoys.vgo
@@ -111,21 +130,21 @@ envoys:
     configcrates: [motd]
 ```
 
-## 5. Publier
+Lister des configcrates dans le `common.vgo` fourni ne les donne, à lui seul, à aucun Envoy.
+
+## 6. Publier
 
 ```bash
 sudo vigocli config publish
 ```
 
-Valide l'arborescence, synchronise vers `/srv/vigo/.live/`, déclenche un rechargement du serveur. Si la validation échoue, l'assistant IA intégré affiche des suggestions de correction dans votre terminal.
+Valide l'arborescence, synchronise vers `/srv/vigo/.live/`, déclenche un rechargement du serveur. Si la validation échoue, la commande indique ce qui ne va pas et dans quel fichier. Ajoutez `--ask-ai` pour obtenir aussi des suggestions de correction de l'assistant IA, si vous en avez configuré un.
 
-## 6. Forcer un check-in immédiat (sans attendre le suivant)
+## 7. Attendre le prochain check-in
 
-```bash
-sudo vigocli envoys push --all
-```
+Les Envoys récupèrent la configuration publiée à leur prochain check-in. Avec le `checkin.interval` fourni par défaut de cinq minutes (plus jusqu'à 20 % de gigue), cela prend au plus six minutes environ.
 
-## 7. Vérifier
+## 8. Vérifier
 
 ```bash
 sudo vigocli runs list --limit 5

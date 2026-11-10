@@ -17,6 +17,7 @@ sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
 sudo docker tag ghcr.io/daniel-alexander4/vigo:latest vigo:latest   # the name the compose file runs
 sudo mkdir -p /srv/vigo
 sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
+sudo sed -i "s|^  # hostname: .*|  hostname: $(hostname)|" /srv/vigo/server.yaml   # the server's own host name
 cd /srv/vigo && sudo docker compose up -d
 ```
 
@@ -30,10 +31,11 @@ go run ./server/hardening/cmd/sign -genkey -output signing.key   # optional: let
 sudo scripts/upgrade.sh full --norun   # builds the server image (tagged vigo:latest) and the amd64 agent
 sudo mkdir -p /srv/vigo
 sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
+sudo sed -i "s|^  # hostname: .*|  hostname: $(hostname)|" /srv/vigo/server.yaml   # the server's own host name
 cd /srv/vigo && sudo docker compose up -d
 ```
 
-`--seed-only` fills `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, and example configs, and `docker compose up -d` starts the server, which generates its CA and TLS certificates under `/srv/vigo/tls/` on first start. The dashboard is at `https://localhost:8443/`. Then enroll the server's own agent over loopback with `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh`, and create your login with `sudo vigocli webusers create --username <you> --role admin` followed by `sudo vigocli webusers set-password --username <you>`, where `<you>` is your account on the server host. Other machines enroll over ports 8443, 1530 and 1531, so open those if a firewall is in the way.
+`--seed-only` fills `/srv/vigo/` with `docker-compose.yml`, `server.yaml`, `.env`, and example configs, and `docker compose up -d` starts the server, which generates its CA and TLS certificates under `/srv/vigo/tls/` on first start. The dashboard is at `https://localhost:8443/`. Then enroll the server's own agent over loopback with `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh`, then set up the secrets vault with `sudo vigocli secrets init` and `sudo vigocli secrets unlock` and create your login with `sudo vigocli webusers create --username <you> --role admin` (it asks for the password), where `<you>` is your account on the server host and has an SSH key in `~/.ssh/`. Other machines enroll over ports 8443, 1530 and 1531, so open those if a firewall is in the way.
 
 ### 2. Bootstrap managed nodes
 

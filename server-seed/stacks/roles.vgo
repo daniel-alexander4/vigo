@@ -1,18 +1,18 @@
-# Role definitions — group modules into reusable profiles.
-# Assign roles to envoy entries instead of listing modules individually.
+# Role definitions — group configcrates into reusable profiles.
+# Assign roles to envoy entries instead of listing configcrates individually.
 #
 # Example:
 #   roles:
 #     - name: webserver
-#       modules: [nginx, certbot, logrotate]
+#       configcrates: [nginx, certbot, logrotate]
 #     - name: database
-#       modules: [postgres, pg-backup]
+#       configcrates: [postgres, pg-backup]
 #     - name: base-security
-#       modules: [sshd, fail2ban, auditd]
+#       configcrates: [sshd, fail2ban, auditd]
 #
 # Roles can include other roles (single level):
 #     - name: webserver
 #       includes: [base-security]
-#       modules: [nginx, certbot]
+#       configcrates: [nginx, certbot]
 
 roles: []

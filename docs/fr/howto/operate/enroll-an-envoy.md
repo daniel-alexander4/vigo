@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:31e17d33a0bf295d9bbb45475989817f58f8d9c34aaa0dd17f07af35cdd9b121 -->
+<!-- vigo-i18n source_sha:fd369a89f7e590f74b7886036d692133fe6d7fbc402d5cc097b361fe1a9fce25 -->
 
 # Enrôler un Envoy
 
@@ -6,7 +6,7 @@
 
 **Quand l'utiliser :** chaque fois que vous voulez placer une machine *distante* sous gestion Vigo — un nouvel ordinateur portable, une VM neuve, un nœud matériel fraîchement réimagé. L'Envoy distant joint le serveur par nom d'hôte ou IP LAN, ce qui est précisément ce que documente le reste de cette page.
 
-**Quand vous passeriez votre chemin :** l'hôte *propre* au serveur suit une procédure distincte — il s'enrôle lui-même via le loopback IPv4 (`127.0.0.1`) afin que le chemin ne dépende pas de la résolution de nom d'hôte. Voir [Installer le serveur Vigo § Enrôler l'Envoy propre au serveur](install.md#4-enroll-the-servers-own-envoy-do-this-first). Faites celui-ci d'abord, puis revenez ici pour toutes les autres machines.
+**Quand vous passeriez votre chemin :** l'hôte *propre* au serveur suit une procédure distincte — il s'enrôle lui-même via le loopback IPv4 (`127.0.0.1`) afin que le chemin ne dépende pas de la résolution de nom d'hôte. Voir [Installer le serveur Vigo § Enrôler l'Envoy propre au serveur](install.md#4-à-propos-de-lenvoy-propre-du-serveur). Faites celui-ci d'abord, puis revenez ici pour toutes les autres machines.
 
 **Quand vous l'éviteriez totalement :** jamais, pour aucun hôte que vous voulez sous gestion. L'agent est le moyen par lequel Vigo applique l'état.
 

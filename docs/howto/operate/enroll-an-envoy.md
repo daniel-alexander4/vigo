@@ -5,7 +5,7 @@ You'll finish this page with a new machine running the Vigo agent, signed in to 
 
 **When you'd use this:** any time you want a *remote* machine under Vigo management — a new laptop, a fresh VM, a freshly-imaged hardware node. The remote envoy dials the server by hostname or LAN IP, which is what the rest of this page documents.
 
-**When you'd skip this:** the server's *own* host is a separate procedure — it enrolls itself over IPv4 loopback (`127.0.0.1`) so the path doesn't depend on hostname resolution. See [Install the Vigo server § Enroll the server's own envoy](install.md#4-enroll-the-servers-own-envoy-do-this-first). Do that one first, then come back here for every other machine.
+**When you'd skip this:** the server's *own* host is a separate procedure — it enrolls itself over IPv4 loopback (`127.0.0.1`) so the path doesn't depend on hostname resolution. See [Install the Vigo server § Enroll the server's own envoy](install.md#4-about-the-servers-own-envoy). Do that one first, then come back here for every other machine.
 
 **When you'd skip this entirely:** never, for any host you want under management. The agent is how Vigo applies state.
 
