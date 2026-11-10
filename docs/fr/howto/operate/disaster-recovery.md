@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:469887371cd0e6c0e2475c2c2c92a4cde1f51b45a32d89618f0fc66c6eb0ed0f -->
+<!-- vigo-i18n source_sha:c7ec93a73da9b666b79383ac7b969112b5800743476e0bb3bafa044b45fe9763 -->
 
 # Reprise après sinistre
 
@@ -165,24 +165,21 @@ Si le serveur et toutes les sauvegardes sont perdus :
 Après la restauration, vérifiez que le serveur est sain :
 
 ```bash
-# Check server is running
-curl -sk https://localhost:8443/api/v1/health
+# Check the server is up (prints ok once it is ready)
+curl -sk https://127.0.0.1:8443/healthz
 
-# Verify enrolled envoys are visible
-vigocli nodes
+# Run the full diagnostic
+sudo vigocli doctor
 
-# Check compliance status
-vigocli nodes | grep -c compliant
-
-# Verify envoys are checking in again
+# Verify enrolled envoys are visible and checking in again
 # (each one reports at its next check-in cycle; watch LAST SEEN)
-vigocli envoys list
+sudo vigocli envoys list
 
 # Check the dashboard
 open https://<server-ip>:8443/
 ```
 
-Si des envoys apparaissent « hors ligne » après la restauration, c'est attendu -- ils repasseront à convergé/relapsé après leur prochain check-in.
+Si des envoys apparaissent comme inactifs après la restauration, c'est attendu : chacun retrouve son état normal après son prochain check-in.
 
 
 ## Reprise Spanner
@@ -261,7 +258,7 @@ vigocli backup restore /backup/vigo-latest.tar.gz \
 
 ## Et ensuite
 
-- **Planifiez un exercice de reprise après sinistre trimestriel** → restaurez une archive de sauvegarde sur un hôte jetable. Vérifiez `/api/v1/health`, puis faites passer un envoy par un check-in contre le serveur restauré. Considérez les sauvegardes non testées comme inopérantes.
+- **Planifiez un exercice de reprise après sinistre trimestriel** → restaurez une archive de sauvegarde sur un hôte jetable. Vérifiez `/healthz`, puis faites passer un envoy par un check-in contre le serveur restauré. Considérez les sauvegardes non testées comme inopérantes.
 - **Vous opérez un spanner hub-spoke** → restaurez chaque rôle indépendamment (le hub et le Bolt ont des bases de données séparées). Re-vérifiez les réaffectations et les drains après la restauration du hub.
 - **Une étape de restauration a échoué** → [Dépanner les problèmes courants](troubleshoot.md).
 

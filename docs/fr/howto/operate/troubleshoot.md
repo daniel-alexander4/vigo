@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:08690d0f27ccd154fe19215f0d5582c7dd3bc6e5986ac1bbf7249edb1607bee1 -->
+<!-- vigo-i18n source_sha:076bf1dcb709f58680c37cd9ae7dfa8860d0e618b3209b6380125bb2d4e903fd -->
 
 # Résoudre les problèmes courants
 
@@ -225,7 +225,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 3. Vérifiez si l'Envoy est révoqué :
    ```bash
-   vigocli nodes list
+   vigocli envoys list --all   # STATUS shows revoked
    ```
 
 4. Vérifiez que la paire de clés de l'agent correspond à la clé publique stockée sur le serveur. L'agent génère une paire de clés ED25519 à l'enrôlement, et la clé publique est stockée dans la table `envoys`.
