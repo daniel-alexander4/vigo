@@ -85,12 +85,12 @@ func TestRequireVaultUnlockedForWebusers_Locked(t *testing.T) {
 }
 
 // TestWebuserPasswordKey pins the secrets-vault key shape against
-// server/auth/basic.go:188. If basic.go's key format changes without this
+// server/auth/basic.go. If basic.go's key format changes without this
 // helper updating, the test catches it (string-literal mismatch).
 func TestWebuserPasswordKey(t *testing.T) {
 	got := webuserPasswordKey("dan")
 	want := "vigo/web/auth/dan"
 	if got != want {
-		t.Errorf("webuserPasswordKey(\"dan\") = %q, want %q (must match server/auth/basic.go:188)", got, want)
+		t.Errorf("webuserPasswordKey(\"dan\") = %q, want %q (must match server/auth/basic.go)", got, want)
 	}
 }

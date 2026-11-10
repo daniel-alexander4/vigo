@@ -610,8 +610,10 @@ func (cs *ConfigStore) Get(hostname string) *EnvoyConfig {
 		return cfg
 	}
 
-	// No explicit match — apply root common.vgo inheritance so every
-	// enrolled envoy gets the baseline config without needing match: "*".
+	// No explicit match — apply root common.vgo as a baseline. Note that
+	// check-in resolves through Match, not Get, so an unmatched envoy
+	// receives nothing at check-in; only Get's callers (DryRun, the AI
+	// dry-run tool, CMDB export) see this fallback.
 	if cc, ok := cs.commonConfigs[""]; ok && (len(cc.Configcrates) > 0 || len(cc.Roles) > 0) {
 		entry := EnvoyEntry{Configcrates: cc.Configcrates, Roles: cc.Roles}
 		if cc.Vars != nil {
@@ -3865,9 +3867,10 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEn
 }
 
 // inheritanceChain returns the ordered list of CommonConfigs from root
-// down to (but not including) the entry's own directory level.
+// down to AND including the entry's own directory level.
 // For an entry at "production/web", it returns commons for:
-// "" (root), "production" — in that order.
+// "" (root), "production", "production/web" — in that order.
+// Entries at the root itself inherit nothing (see below).
 func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*CommonConfig {
 	if dirPath == "" {
 		// Root-level entries get no inheritance (common.vgo at root

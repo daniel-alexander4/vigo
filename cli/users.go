@@ -359,7 +359,7 @@ func readWebuserPassword() (string, error) {
 }
 
 // webuserPasswordKey is the canonical secrets-vault path basic auth reads
-// from (server/auth/basic.go:188). One source of truth; if this drifts,
+// from (server/auth/basic.go, VerifyPassword path). One source of truth; if this drifts,
 // passwords get written somewhere basic auth can't find — silent breakage.
 func webuserPasswordKey(username string) string {
 	return fmt.Sprintf("vigo/web/auth/%s", username)
