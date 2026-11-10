@@ -26,25 +26,27 @@ IMAGE=vigo:latest   # the tag the build gives the local image
 ```bash
 sudo mkdir -p /srv/vigo
 sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo sed -i "s|^  # hostname: .*|  hostname: $(hostname)|" /srv/vigo/server.yaml
 cd /srv/vigo
 sudo docker compose up -d
 ```
 
-`--seed-only` writes `/srv/vigo/docker-compose.yml`, `server.yaml`, `.env`, and example configs, then exits. `docker compose up -d` starts the server, which generates its CA and TLS certificates under `/srv/vigo/tls/` on first start. REST + Web UI on `https://localhost:8443`, gRPC on `localhost:1530`.
+`--seed-only` writes `/srv/vigo/docker-compose.yml`, `server.yaml`, `.env`, and example configs, then exits. The `sed` line sets `server.hostname` in `server.yaml` to this host's name, which the server needs to find its own agent when you create your admin login; you can also edit the file by hand before starting. `docker compose up -d` starts the server, which generates its CA and TLS certificates under `/srv/vigo/tls/` on first start. REST + Web UI on `https://localhost:8443`, gRPC on `localhost:1530`.
 
 Single-`docker run` if you don't want compose:
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run -d --name vigo \
+sudo docker run -d --name vigo \
   --network host \
   -v /srv/vigo:/srv/vigo \
+  -v /usr/local/bin:/host-bin \
   "$IMAGE"
 ```
 
-`--network host` binds 8443 (REST/UI), 1530 (gRPC), and 1531 (swarm) directly on the host — matching the generated compose, which host-networks the server so agent traffic doesn't route through Docker's per-port userland proxy. (Scrier's `guacd` sidecar isn't started by this bare `docker run`; use compose if you need RDP/VNC scrier sessions.)
+`--network host` binds 8443 (REST/UI), 1530 (gRPC), and 1531 (swarm) directly on the host — matching the generated compose, which host-networks the server so agent traffic doesn't route through Docker's per-port userland proxy. The `/host-bin` mount is how the container installs `vigocli` on the host. (Scrier's `guacd` sidecar isn't started by this bare `docker run`; use compose if you need RDP/VNC scrier sessions.)
 
-Open `https://localhost:8443` and accept the self-signed cert. There is no default admin login; create yours after the next step, as described in [Install](howto/operate/install.md#2-start-the-server).
+Open `https://localhost:8443` and accept the self-signed cert. There is no default admin login; you create yours in step 3, after the server's own agent is enrolled.
 
 ## 2. Enroll envoys
 
@@ -67,7 +69,21 @@ The bootstrap script also installs the per-OS service (systemd / launchd / rc.d 
 
 After enrollment each envoy appears in the dashboard at `https://localhost:8443/envoys` and checks in at the interval set by `checkin.interval` in `server.yaml`.
 
-## 3. Write a configcrate
+## 3. Create your login
+
+Admin logins map to real accounts on the server host: the account needs a login shell and an SSH public key in `~/.ssh/id_ed25519.pub` or `id_rsa.pub` (create one with `ssh-keygen -t ed25519` as that user if it has none). The server checks the account against its own agent's report, using the `server.hostname` you set in step 1. Initialize the secrets vault, then create the admin; `webusers create` asks for the login password.
+
+```bash
+sudo vigocli secrets init          # sets the vault passphrase
+sudo vigocli secrets unlock
+sudo vigocli webusers create --username <you> --role admin
+```
+
+The server checks the account against the list of accounts the agent last reported. If `webusers create` says the agent hasn't reported yet, or that the account isn't a human user because you created it after step 2, wait for the agent's next check-in (up to about five minutes) and run it again.
+
+Sign in at `https://localhost:8443/login` as `<you>`.
+
+## 4. Write a configcrate
 
 ```yaml
 # /srv/vigo/stacks/configcrates/motd.vgo
@@ -76,6 +92,7 @@ resources:
   - name: motd-file
     type: file
     target_path: /etc/motd
+    state: present
     content: |
       ========================================
       Managed by Vigo
@@ -87,16 +104,18 @@ resources:
     mode: "0644"
 ```
 
-## 4. Assign the configcrate to envoys
+## 5. Assign the configcrate to envoys
 
-The simplest assignment — every envoy gets it:
+An envoy gets configuration only when an entry in a hostcrate matches its hostname. The simplest hostcrate gives the configcrate to every envoy:
 
 ```yaml
-# /srv/vigo/stacks/common.vgo
-configcrates: [motd]
+# /srv/vigo/stacks/envoys.vgo
+envoys:
+  - match: "*"
+    configcrates: [motd]
 ```
 
-For per-host assignment use a hostcrate:
+For per-host assignment, put more specific entries above the catch-all; the first match wins. In this example, `nginx` and `postgres` stand for configcrates you have written yourself:
 
 ```yaml
 # /srv/vigo/stacks/envoys.vgo
@@ -109,21 +128,21 @@ envoys:
     configcrates: [motd]
 ```
 
-## 5. Publish
+Listing configcrates in the seeded `common.vgo` does not, on its own, give them to any envoy.
+
+## 6. Publish
 
 ```bash
 sudo vigocli config publish
 ```
 
-Validates the tree, syncs to `/srv/vigo/.live/`, triggers a server reload. If validation fails, the built-in AI assistant prints fix suggestions to your terminal.
+Validates the tree, syncs to `/srv/vigo/.live/`, triggers a server reload. If validation fails, it prints what is wrong and in which file. Add `--ask-ai` to also get fix suggestions from the AI assistant, if you have configured one.
 
-## 6. Force an immediate check-in (don't wait for the next one)
+## 7. Wait for the next check-in
 
-```bash
-sudo vigocli envoys push --all
-```
+Envoys pick up the published config at their next check-in. With the seeded `checkin.interval` of five minutes (plus up to 20% jitter), that is at most about six minutes.
 
-## 7. Verify
+## 8. Verify
 
 ```bash
 sudo vigocli runs list --limit 5

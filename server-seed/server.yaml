@@ -9,7 +9,7 @@
 server:
   grpc_listen: ":1530"
   api_listen: ":8443"
-  # hostname: danlap  # server's envoy hostname — used for server compliance display
+  # hostname: myserver  # this host's name (output of `hostname`); required before creating an admin login
   tls:
     cert_file: "tls/cert"
     key_file: "tls/key"

@@ -37,20 +37,23 @@ Then seed the data directory and start it:
 ```bash
 sudo mkdir -p /srv/vigo
 sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo sed -i "s|^  # hostname: .*|  hostname: $(hostname)|" /srv/vigo/server.yaml
 cd /srv/vigo && sudo docker compose up -d
 ```
+
+The `sed` line sets `server.hostname` in `server.yaml` to this host's name; the server needs it to find its own agent when you create your login.
 
 The server listens on **`:1530`** (gRPC, for agents) and **`:8443`** (REST + web UI). Give it a few seconds, then check it's healthy:
 
 ```bash
-docker compose ps
+sudo docker compose ps
 ```
 
 You'll see `vigo` and `vigo-guacd` both `Up (healthy)`. While the server is still starting, `vigo` shows `Up (health: starting)`; `curl -sk https://127.0.0.1:8443/healthz` prints `ok` once it is ready.
 
 ## 2. Log in
 
-Open **`https://127.0.0.1:8443`** in a browser and accept the self-signed certificate. There is no default admin login. Do step 3 first, then create your admin from a real OS account on this host with `sudo vigocli webusers create --username <yourname> --role admin` and `sudo vigocli webusers set-password --username <yourname>`, and sign in as `<yourname>`.
+Open **`https://127.0.0.1:8443`** in a browser and accept the self-signed certificate. There is no default admin login. Do step 3 first and wait about 30 seconds for that agent to check in. The account you log in as needs an SSH public key in `~/.ssh/` (create one with `ssh-keygen -t ed25519` if it has none). Set up the secrets vault with `sudo vigocli secrets init` and `sudo vigocli secrets unlock`, then create your admin from a real OS account on this host with `sudo vigocli webusers create --username <yourname> --role admin`, which asks for the login password, and sign in as `<yourname>`.
 
 You'll land on the dashboard — empty for now, because no envoys exist yet.
 
@@ -70,6 +73,6 @@ The default trusted-enrollment policy (private + loopback CIDRs) auto-signs this
 
 ## Checkpoint
 
-You have: a healthy server, a browser session, and one converging envoy. If the dashboard still shows zero envoys after a minute, see [Install](../howto/operate/install.md#troubleshooting).
+You have: a healthy server, a browser session, and one converging envoy. If the dashboard still shows zero envoys after a minute, see [Troubleshoot common issues](../howto/operate/troubleshoot.md).
 
 **Next:** [Enroll your first envoy →](enroll-your-first-envoy.md) — a *separate* machine.

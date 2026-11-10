@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:96b51c1b1e9af54c9460616fa4ff86917051cfec05ade6de07600b61478d86b6 -->
+<!-- vigo-i18n source_sha:d7a50ca586afdec6a9f7a923e5e27ab8349978fb05c3762d3843c69e6d0531d1 -->
 
 # Installer le serveur Vigo
 
@@ -38,36 +38,38 @@ IMAGE=vigo:latest   # le tag que la compilation donne à l'image locale
 ```bash
 sudo mkdir -p /srv/vigo
 sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo sed -i "s|^  # hostname: .*|  hostname: $(hostname)|" /srv/vigo/server.yaml
 ```
+
+La ligne `sed` définit `server.hostname` dans `server.yaml` sur le nom de cet hôte. Le serveur s'en sert pour trouver son propre agent, et refuse de créer une connexion admin sans lui. Définissez-le avant le premier démarrage ; le modifier ensuite nécessite un redémarrage.
 
 Cela peuple `/srv/vigo/` avec tout ce qui est nécessaire pour exécuter le serveur :
 
 ```
 /srv/vigo/
-├── docker-compose.yml       # production compose file
+├── docker-compose.yml       # production compose file (rewritten on every start)
 ├── server.yaml              # server config
-├── .env                     # non-secret env vars
-├── tls/                     # mTLS certificates (auto-generated)
+├── .env                     # optional services (COMPOSE_PROFILES)
+├── LICENSE, LICENSE-agent, NOTICE
+├── tls/                     # CA and server certificate (generated on first start)
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
+├── custom-traits/           # your own trait collectors
 ├── stacks/                  # operator-edited config tree
-│   ├── configcrates/        # reusable configcrate definitions
+│   ├── configcrates/        # reusable configcrate definitions (empty)
 │   ├── usercrates/          # user-scoped configcrates (inert until included via `usercrates:`)
 │   ├── templates/           # Go template fragments
-│   ├── tasks/               # reusable task definitions
+│   ├── tasks/               # reusable task definitions (a few starters)
 │   ├── workflows/           # workflow definitions
-│   ├── envoys.vgo           # hostcrate (any .vgo with envoys: works)
-│   ├── roles.vgo            # role definitions (single, fleet-wide)
-│   ├── common.vgo           # directory-inherited defaults
-│   ├── waivers.vgo          # compliance waivers (any depth)
-│   ├── environments.vgo     # per-env configcrate/var overrides
-│   └── compliance.vgo       # directory-inherited claims
-├── stacks-examples/         # read-only install templates
-│                            #   (rebuilt from image on every container start;
-│                            #    vigocli config examples copy)
+│   ├── roles.vgo            # role definitions (single, fleet-wide; starts empty)
+│   └── common.vgo           # directory-inherited defaults (starts empty)
+├── stacks-examples/         # read-only examples, rebuilt from the image on every start;
+│                            #   copy from it with `vigocli config examples copy`
 ├── .live/                   # published config (locked between publishes)
 └── config-history/          # rollback snapshots
 ```
+
+Vous ajoutez vous-même les autres fichiers de configuration au fur et à mesure de vos besoins : un hostcrate (n'importe quel fichier `.vgo` contenant `envoys:`, par convention `envoys.vgo`), `waivers.vgo`, `environments.vgo` et `compliance.vgo`. `stacks-examples/` contient un exemple de chacun.
 
 ### 2. Démarrer le serveur
 
@@ -79,8 +81,8 @@ sudo docker compose up -d
 Le serveur démarre sur les ports **1530** (gRPC, check-in des agents) et **8443** (HTTPS — API REST, interface web, métriques, bootstrap), plus **1531** pour le transfert de blobs swarm entre envoys. Ouvrez les trois aux machines que vous enrôlerez si un pare-feu est en travers. Trois étapes CLI mettent l'installation en route à partir d'ici, **dans l'ordre** :
 
 1. **Initialiser le coffre à secrets** — `sudo vigocli secrets init` (le serveur a déjà créé la clé maîtresse ; cette commande définit la phrase secrète de déverrouillage), puis `sudo vigocli secrets unlock`. Le coffre doit être initialisé avant de pouvoir stocker des secrets avec `vigocli secrets set`. Sur l'hôte, `vigocli` est réservé à root : lancez-le avec `sudo`.
-2. **Enrôler l'agent local** — `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh` depuis l'hôte du serveur. **Utilisez `127.0.0.1`, pas `localhost` ni le nom d'hôte propre de cette machine** — l'agent que le script installe compose, à chaque check-in ultérieur, l'adresse exacte utilisée par l'URL de curl, et seule la valeur littérale de bouclage IPv4 est indépendante du résolveur (pas de nsswitch, pas de mDNS, pas de piège IPv6 link-local). L'enrôlement de cet hôte par son adresse LAN ou son nom d'hôte est refusé, car ce nom fait partie des noms TLS du serveur. Cette étape enrôle *uniquement* l'hôte propre du serveur ; toute autre machine que vous souhaitez gérer suit la procédure distincte dans [Enrôler un envoy](enroll-an-envoy.md), qui compose le serveur par son nom d'hôte joignable. Le serveur a une hypothèse canonique (selon CLAUDE.md) qu'un agent `vigo` s'exécute sur le même hôte aux côtés du conteneur ; l'étape de création d'admin ci-dessous utilise le trait `users` de cet agent pour vérifier la correspondance utilisateur-OS. Attendez que l'agent ait remonté un check-in (~30s) avant de continuer.
-3. **Créer votre admin par opérateur** — `sudo vigocli webusers create --username <yourname> --role admin` depuis l'hôte du serveur, où `<yourname>` est un véritable compte OS humain sur cette machine (uid≥1000, shell réel). La CLI lit automatiquement votre clé publique depuis `/home/<yourname>/.ssh/id_ed25519.pub` (repli sur `id_rsa.pub`) ; pas de drapeau `--ssh-key-file` pour le rôle admin. Ensuite, `sudo vigocli webusers set-password --username <yourname>` pour définir votre mot de passe de connexion (il stocke un hash bcrypt ; n'écrivez pas directement la clé du coffre).
+2. **Enrôler l'agent local** — `curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh` depuis l'hôte du serveur. **Utilisez `127.0.0.1`, pas `localhost` ni le nom d'hôte propre de cette machine** — l'agent que le script installe compose, à chaque check-in ultérieur, l'adresse exacte utilisée par l'URL de curl, et seule la valeur littérale de bouclage IPv4 est indépendante du résolveur (pas de nsswitch, pas de mDNS, pas de piège IPv6 link-local). L'enrôlement de cet hôte par son adresse LAN ou son nom d'hôte est refusé, car ce nom fait partie des noms TLS du serveur. Cette étape enrôle *uniquement* l'hôte propre du serveur ; toute autre machine que vous souhaitez gérer suit la procédure distincte dans [Enrôler un envoy](enroll-an-envoy.md), qui compose le serveur par son nom d'hôte joignable. Vigo suppose qu'un agent `vigo` s'exécute sur le même hôte que le conteneur ; l'étape de création d'admin ci-dessous utilise le trait `users` de cet agent pour vérifier la correspondance utilisateur-OS. Attendez que l'agent ait remonté un check-in (~30s) avant de continuer.
+3. **Créer votre admin par opérateur** — `sudo vigocli webusers create --username <yourname> --role admin` depuis l'hôte du serveur, où `<yourname>` est un véritable compte OS humain sur cette machine (uid≥1000, shell réel). Elle nécessite que `server.hostname` soit défini (étape 1) et demande le mot de passe de connexion. La CLI lit votre clé publique depuis `/home/<yourname>/.ssh/id_ed25519.pub` (repli sur `id_rsa.pub`) et refuse si aucune n'existe : créez-en donc une d'abord avec `sudo -u <yourname> ssh-keygen -t ed25519` si nécessaire ; pas de drapeau `--ssh-key-file` pour le rôle admin. Pour changer le mot de passe plus tard, utilisez `sudo vigocli webusers set-password --username <yourname>`.
 
 Connectez-vous à `https://localhost:8443/login` en tant que `<yourname>`. L'utilisateur `admin` par défaut n'est délibérément pas créé automatiquement — les webusers admin correspondent 1:1 à de véritables utilisateurs OS afin que l'attribution d'audit nomme toujours un humain réel et que les sessions Scrier dans le navigateur initialisent automatiquement votre clé publique. Si vous avez besoin de plusieurs opérateurs, répétez l'étape 3 pour chacun.
 
@@ -94,15 +96,9 @@ curl -sk https://127.0.0.1:8443/healthz # ok = serveur prêt (503 pendant le dé
 sudo vigocli doctor                   # full diagnostic
 ```
 
-### 4. Enrôler l'envoy propre du serveur (faites-le en premier)
+### 4. À propos de l'envoy propre du serveur
 
-Vigo suppose que chaque serveur exécute un agent `vigo` co-hébergé sur le même hôte que le conteneur vigosrv. L'envoy propre du serveur est ce qui rend le serveur visible dans `vigocli swarm status`, lui permet de participer à Puddle / Lockbox / Gitback, et d'amorcer des charges utiles vers les pairs via le substrat Swarm. Cette étape est la première chose canonique à faire une fois le conteneur démarré — et elle est **distincte de l'enrôlement des autres envoys** (couvert dans [Enrôler un envoy](enroll-an-envoy.md)) car l'agent propre du serveur se compose *lui-même*, et ce chemin ne doit pas dépendre de la résolution de noms d'hôtes.
-
-Depuis l'hôte du serveur lui-même :
-
-```bash
-curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh
-```
+L'étape 2 ci-dessus a enrôlé l'hôte propre du serveur. Vigo suppose que chaque serveur exécute un agent `vigo` co-hébergé sur le même hôte que le conteneur vigosrv. L'envoy propre du serveur est ce qui rend le serveur visible dans `vigocli swarm status`, lui permet de participer à Puddle / Lockbox / Gitback, et d'amorcer des charges utiles vers les pairs via le substrat Swarm. Il est **distinct de l'enrôlement des autres envoys** (couvert dans [Enrôler un envoy](enroll-an-envoy.md)) car l'agent propre du serveur se compose *lui-même*, et ce chemin ne doit pas dépendre de la résolution de noms d'hôtes.
 
 `127.0.0.1` est la valeur littérale de bouclage IPv4 — pas de nsswitch, pas de DNS, pas de mDNS, pas d'IPv6 link-local. Le script de bootstrap écrit dans `/etc/vigo-envoy/config` l'adresse exacte utilisée par l'URL de curl, si bien que l'agent compose cette adresse exacte à chaque check-in. Si vous utilisez `localhost` ou le nom d'hôte propre de cette machine, le chemin de check-in de l'agent hérite silencieusement d'une dépendance à la pile de résolution de noms du système — et dès qu'une de ses couches change (rotation de la délégation de préfixe Starlink, réannonce de NetworkManager, renommage de l'hôte), l'agent ne peut plus composer son point de ralliement. Utilisez `127.0.0.1` même si `localhost` fonctionne aujourd'hui.
 
@@ -113,7 +109,7 @@ systemctl is-active vigo-envoy       # → active
 sudo vigocli envoys list             # the server should appear under its host's hostname
 ```
 
-Le nom d'hôte enrôlé de l'agent est ce que renvoie `hostname` sur l'hôte. Faites-le correspondre avec `server.hostname` dans `server.yaml` (utilisé pour l'affichage de conformité) afin que les deux vues s'accordent.
+Le nom d'hôte enrôlé de l'agent est ce que renvoie `hostname` sur l'hôte. `server.hostname` dans `server.yaml` doit lui correspondre (étape 1) : le serveur s'en sert pour trouver son propre envoy lors de la création d'admin et pour son affichage de conformité.
 
 Si vous sautez cette étape, les fonctionnalités Swarm qui transitent par l'envoy du serveur ne feront silencieusement rien pour le nom d'hôte propre du serveur. `vigocli swarm filecast distribute` fonctionne encore (écrit directement dans le répertoire d'amorçage monté en bind), mais la plupart des autres opérations Swarm n'impliquent pas le serveur dans l'ensemble des pairs.
 
@@ -179,11 +175,13 @@ Le conteneur installe automatiquement `vigocli` dans `/usr/local/bin` sur l'hôt
 docker cp vigo:/usr/local/bin/vigocli /usr/local/bin/vigocli
 ```
 
-La CLI détecte automatiquement le serveur à `https://localhost:8443`. Pour les serveurs distants :
+Sur l'hôte du serveur, `sudo vigocli` s'adresse à `https://localhost:8443` avec le jeton d'admin local que le serveur crée dans `/srv/vigo/cli-admin-token` ; aucune configuration n'est donc nécessaire. Pour l'utiliser depuis une autre machine, enregistrez un jeton d'API avec `vigocli auth set-token` et indiquez le serveur à chaque commande, avec une copie du certificat de la CA du serveur (`/srv/vigo/tls/ca`) :
 
 ```bash
-export VIGO_SERVER="http://vigo-server:8443"
+vigocli --server https://vigo-server:8443 --ca-file ./vigo-ca.crt envoys list
 ```
+
+Voir [vigocli auth](../../reference/vigocli/auth.md) pour la création du jeton.
 
 ## Agent
 
@@ -250,6 +248,7 @@ Voir [Bootstrap](enroll-an-envoy.md) pour les détails sur le flux d'enrôlement
 |------|----------|---------|
 | 1530 | gRPC (mTLS) | Check-in des agents, remontée de résultats, streaming |
 | 8443 | HTTPS | API REST, interface web, métriques, bootstrap |
+| 1531 | HTTPS (mTLS) | Transfert de blobs swarm entre envoys |
 
 ## Disposition du répertoire de l'agent
 
@@ -273,19 +272,22 @@ Voir [Bootstrap](enroll-an-envoy.md) pour les détails sur le flux d'enrôlement
 Un serveur sain remonte ses composants individuellement via `vigocli doctor` :
 
 ```text
-$ docker exec vigo /usr/local/bin/vigocli doctor
+$ sudo vigocli doctor
   database ................ OK
-  tls ..................... OK (expires 2027-05-05)
+  tls ..................... OK (expires 2027-11-10)
   secrets ................. OK (local)
-  spanner .................. SKIP (standalone)
+  spanner ................. SKIP (standalone)
   integrations ............ SKIP (no integrations configured)
-  config .................. OK (43 configcrates, 5 entries)
+  config .................. OK (1 configcrates, 1 entries)
   swarm_pattern_order ..... OK (all swarm.*.enabled pattern lists well-ordered)
   stale_envoys ............ OK
+  unpinned_envoys ......... OK
+  webusers_replication .... SKIP (standalone — replication N/A)
+
   Status: healthy
 ```
 
-`SKIP` est attendu pour `spanner` (vous n'exécutez pas en mode hub-spoke) et `integrations` (vous n'avez pas encore branché d'alerting externe). `database / tls / secrets / config` devraient tous être `OK` sur une installation fraîche. Un `WARN` sur `stale_envoys` après le premier cycle de check-in signifie qu'au moins un envoy n'a pas remonté depuis `2.5 × max(interval, observed_cycle)` secondes — allez voir ce qui se passe.
+`SKIP` est attendu pour `spanner` et `webusers_replication` (vous exécutez un seul serveur) et `integrations` (vous n'avez pas encore branché d'alerting externe). `config` affiche `WARN (no configcrates loaded)`, et le statut global `degraded`, jusqu'à ce que vous publiiez votre premier configcrate ; ensuite, `database / tls / secrets / config` devraient tous être `OK`. Un `WARN` sur `stale_envoys` après le premier cycle de check-in signifie qu'au moins un envoy n'a pas remonté depuis `2.5 × max(interval, observed_cycle)` secondes — allez voir ce qui se passe.
 
 ## Et ensuite
 
@@ -294,4 +296,4 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
 - **Si le serveur n'a pas démarré proprement** → [Dépanner les problèmes courants](troubleshoot.md).
 
 ---
-*Vérifié sur Vigo 0.51.6 · 2026-05-13.*
+*Vérifié sur Vigo 0.80.0 · 2026-11-10.*

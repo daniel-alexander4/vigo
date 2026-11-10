@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:6e4ac1b99ffc19b8950f4de1ab8b7b7a59faf5bd586a4cccc51cbb1ee4fc50a0 -->
+<!-- vigo-i18n source_sha:0179813d5414691aa78c89e09271f282ea36032bf186a86f0a7305502af26b61 -->
 
 # 1 · Mettre le serveur en service
 
@@ -39,20 +39,23 @@ Initialisez ensuite le répertoire de données et démarrez le serveur :
 ```bash
 sudo mkdir -p /srv/vigo
 sudo docker run --rm -v /srv/vigo:/srv/vigo "$IMAGE" --seed-only
+sudo sed -i "s|^  # hostname: .*|  hostname: $(hostname)|" /srv/vigo/server.yaml
 cd /srv/vigo && sudo docker compose up -d
 ```
+
+La ligne `sed` définit `server.hostname` dans `server.yaml` sur le nom de cet hôte ; le serveur en a besoin pour trouver son propre agent lorsque vous créez votre connexion.
 
 Le serveur écoute sur **`:1530`** (gRPC, pour les agents) et **`:8443`** (REST + interface web). Laissez-lui quelques secondes, puis vérifiez qu'il est en bonne santé :
 
 ```bash
-docker compose ps
+sudo docker compose ps
 ```
 
 Vous verrez `vigo` et `vigo-guacd` tous deux en `Up (healthy)`. Tant que le serveur démarre, `vigo` affiche `Up (health: starting)` ; `curl -sk https://127.0.0.1:8443/healthz` affiche `ok` dès qu'il est prêt.
 
 ## 2. Se connecter
 
-Ouvrez **`https://127.0.0.1:8443`** dans un navigateur et acceptez le certificat auto-signé. Il n'existe pas de connexion admin par défaut. Faites d'abord l'étape 3, puis créez votre admin à partir d'un véritable compte OS de cet hôte avec `sudo vigocli webusers create --username <yourname> --role admin` et `sudo vigocli webusers set-password --username <yourname>`, et connectez-vous en tant que `<yourname>`.
+Ouvrez **`https://127.0.0.1:8443`** dans un navigateur et acceptez le certificat auto-signé. Il n'existe pas de connexion admin par défaut. Faites d'abord l'étape 3 et attendez environ 30 secondes que cet agent fasse son check-in. Le compte avec lequel vous vous connectez doit avoir une clé publique SSH dans `~/.ssh/` (créez-en une avec `ssh-keygen -t ed25519` s'il n'en a pas). Configurez le coffre à secrets avec `sudo vigocli secrets init` et `sudo vigocli secrets unlock`, puis créez votre admin à partir d'un véritable compte OS de cet hôte avec `sudo vigocli webusers create --username <yourname> --role admin`, qui demande le mot de passe de connexion, et connectez-vous en tant que `<yourname>`.
 
 Vous arriverez sur le tableau de bord — vide pour l'instant, car aucun envoy n'existe encore.
 
@@ -72,6 +75,6 @@ La politique d'enrôlement de confiance par défaut (CIDR privés + loopback) si
 
 ## Point de contrôle
 
-Vous disposez de : un serveur en bonne santé, une session navigateur et un envoy en cours de convergence. Si le tableau de bord affiche toujours zéro envoy après une minute, voir [Installation](../howto/operate/install.md#troubleshooting).
+Vous disposez de : un serveur en bonne santé, une session navigateur et un envoy en cours de convergence. Si le tableau de bord affiche toujours zéro envoy après une minute, voir [Dépanner les problèmes courants](../howto/operate/troubleshoot.md).
 
 **Suite :** [Enrôler votre premier envoy →](enroll-your-first-envoy.md) — une machine *distincte*.

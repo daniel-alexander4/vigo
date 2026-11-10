@@ -1,12 +1,12 @@
-# Modules and vars defined here are inherited by all envoy entries
+# Configcrates and vars defined here are inherited by all envoy entries
 # in subdirectories. Edit this file to set your fleet-wide baseline.
 #
 # Example:
-#   modules: [sshd, ntp, monitoring, motd]
+#   configcrates: [sshd, ntp, monitoring, motd]
 #   vars:
 #     dns_server: "1.1.1.1"
 #     ntp_server: pool.ntp.org
 #
-# See: https://vigo.dev/docs/concepts/config-format#directory-inheritance
+# See docs/reference/configcrate-language.md (directory inheritance).
 
 configcrates: []

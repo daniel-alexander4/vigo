@@ -9,7 +9,7 @@ When the CLI runs on the server host it authenticates with the local-admin token
 
 ## Remote Access
 
-When pointing the CLI at a remote server (`--server http://remote:8443`), an API token is required:
+When pointing the CLI at a remote server (`--server https://remote:8443`), an API token is required:
 
 ```bash
 # Generate a token from the web UI admin panel or via local CLI, then:
