@@ -224,7 +224,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 3. Check if the envoy is revoked:
    ```bash
-   vigocli nodes list
+   vigocli envoys list --all   # STATUS shows revoked
    ```
 
 4. Verify the agent's key pair matches the public key stored on the server. The agent generates an ED25519 key pair at enrollment, and the public key is stored in the `envoys` table.

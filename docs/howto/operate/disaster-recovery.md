@@ -164,24 +164,21 @@ If both the server and all backups are lost:
 After restoring, verify the server is healthy:
 
 ```bash
-# Check server is running
-curl -sk https://localhost:8443/api/v1/health
+# Check the server is up (prints ok once it is ready)
+curl -sk https://127.0.0.1:8443/healthz
 
-# Verify enrolled envoys are visible
-vigocli nodes
+# Run the full diagnostic
+sudo vigocli doctor
 
-# Check compliance status
-vigocli nodes | grep -c compliant
-
-# Verify envoys are checking in again
+# Verify enrolled envoys are visible and checking in again
 # (each one reports at its next check-in cycle; watch LAST SEEN)
-vigocli envoys list
+sudo vigocli envoys list
 
 # Check the dashboard
 open https://<server-ip>:8443/
 ```
 
-If envoys show as "offline" after restore, that's expected -- they'll transition back to converged/relapsed after their next check-in.
+If envoys show as stale after restore, that's expected; each one returns to its normal status after its next check-in.
 
 
 ## Spanner Recovery
@@ -260,7 +257,7 @@ vigocli backup restore /backup/vigo-latest.tar.gz \
 
 ## What's next
 
-- **Schedule a quarterly DR drill** → restore a backup tarball to a throwaway host. Verify `/api/v1/health`, then walk an envoy through a check-in against the restored server. Treat untested backups as inoperable.
+- **Schedule a quarterly DR drill** → restore a backup tarball to a throwaway host. Verify `/healthz`, then walk an envoy through a check-in against the restored server. Treat untested backups as inoperable.
 - **You operate a hub-spoke spanner** → restore each role independently (hub and bolt have separate databases). Re-verify reassignments and drains after hub restore.
 - **A restore step failed** → [Troubleshoot common issues](troubleshoot.md).
 
