@@ -9,9 +9,6 @@ Vigo is free software under two licenses.
 | Server (`vigosrv`), CLI (`vigocli`), web UI | [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html) | `LICENSE` in the repository root |
 | Agent (`vigo`), Connwaer, protocol definitions, this documentation | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) | `LICENSE` in `agent/`, `connwaer/`, `protobuf/` and `docs/` |
 
-Releases up to and including 0.77.0 were Apache-2.0 throughout and stay
-that way. The server moved to the AGPL in 0.80.0.
-
 You may use, copy, modify and redistribute all of it, commercially or not.
 Under the AGPL, if you modify the server or CLI and let other people use
 your modified version, including over a network, you must offer them its
