@@ -36,7 +36,9 @@ Premium service credits apply when a production-down response is late. Each
 late response earns a credit of 2% of the annual fee, up to 10% of the annual
 fee per year. Credits are applied to the next invoice.
 
-There is no 24/7 support package.
+Standard and Premium do not include 24/7 cover. For a faster response, or
+terms these two packages don't cover, email vigo.support@alexander4.io for an
+Enterprise quote.
 
 ### Severity
 
