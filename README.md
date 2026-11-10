@@ -4,7 +4,7 @@ Distributed state enforcement for servers, network devices, and workstations. Ag
 
 Far more than configuration management. One server holds tens of thousands of nodes at a tight 1-second cadence — hundreds of thousands at a relaxed one — RAM-bound and linear at **~620 KB/node** with a realistic inventory (size per the [sizing guide](docs/howto/operate/sizing.md)), with peer-equal `spanner` federation beyond a single host's ceiling. Around the convergence engine (69 resource types, 50 trait collectors, 7 operating systems — Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) Vigo bundles regulatory-framework compliance scoring + GRC export, Connwaer active verification, browser SSH/RDP/VNC remote access with no inbound ports (Scrier), a peer-to-peer content/git/artifact substrate, orchestration (ad-hoc tasks, workflows, rolling execution, live queries), a read-only AI assistant, RBAC with pluggable authentication (basic, OIDC, SSH key signing), a tamper-evident audit log, and a web dashboard.
 
-Vigo is open source under the [Apache License 2.0](LICENSE). Every feature is included, and there are no node limits or paid tiers.
+Vigo is free software: the server, CLI and web UI under the [GNU Affero General Public License v3.0](LICENSE), and the agent, Connwaer, protocol definitions and documentation under the [Apache License 2.0](agent/LICENSE). Every feature is included, and there are no node limits or paid tiers.
 
 ## Quickstart
 
@@ -20,7 +20,7 @@ sudo docker run --rm -v /srv/vigo:/srv/vigo vigo:latest --seed-only
 cd /srv/vigo && sudo docker compose up -d
 ```
 
-The published image is signed with the project's release key, so envoys update their agent on their own when you move to a newer image. It carries the Linux agent for amd64 and arm64. To pin a release, use its version tag, such as `:0.77.0`, in place of `:latest`.
+The published image is signed with the project's release key, so envoys update their agent on their own when you move to a newer image. It carries the Linux agent for amd64 and arm64. To pin a release, use its version tag, such as `:0.80.0`, in place of `:latest`.
 
 To build the image from source instead, the host also needs the Buildx plugin, `git` and `rsync`; on Ubuntu, `sudo apt-get install -y git rsync docker.io docker-compose-v2 docker-buildx` installs them. The first build takes about 20 minutes. The optional signing key lets envoys update their agent on their own; without it, every upgrade means re-running the bootstrap on each envoy. Creating it needs Go 1.25, and you should keep the key safe.
 
@@ -480,8 +480,11 @@ Spanner federates fleets that outgrow one server. Each bolt is a write-equal pee
 
 ## License
 
-[Apache License 2.0](LICENSE). Copyright (c) 2026 Alexander4, LLC.
-Contributions are welcome under the same license with a DCO sign-off — see
+The server, CLI and web UI are licensed under the [GNU Affero General Public
+License v3.0](LICENSE). The agent (`agent/`), Connwaer (`connwaer/`), the protocol
+definitions (`protobuf/`) and the documentation (`docs/`) are licensed under the
+[Apache License 2.0](agent/LICENSE). Copyright (c) 2026 Alexander4, LLC.
+Contributions are welcome under the license of the part they change with a DCO sign-off — see
 [CONTRIBUTING.md](CONTRIBUTING.md). The Vigo name and logo are trademarks; see
 [TRADEMARKS.md](TRADEMARKS.md). For questions and bug reports, open an issue or
 email vigo.support@alexander4.io. Paid support subscriptions are described in

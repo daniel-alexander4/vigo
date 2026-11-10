@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // vigo-burstwave drives two overlapping read+write bursts against the server
 // to test behavior when a second convergence wave hits before the first

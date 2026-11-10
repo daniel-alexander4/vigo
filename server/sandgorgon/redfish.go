@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package sandgorgon implements bare metal lifecycle management:
 // BMC discovery, decommissioning, disk sanitization, and NIST 800-88

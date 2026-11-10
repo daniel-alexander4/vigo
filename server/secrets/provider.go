@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package secrets provides a pluggable interface for secret retrieval.
 // The default backend is LocalProvider (AES-256-GCM encrypted files, always encrypted at rest).

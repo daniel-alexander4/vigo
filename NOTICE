@@ -1,11 +1,17 @@
 Vigo
 Copyright 2026 Alexander4, LLC
 
-This product includes software developed by Alexander4, LLC, licensed
-under the Apache License, Version 2.0 (see LICENSE).
+This product includes software developed by Alexander4, LLC.
+
+The Vigo server (vigosrv), CLI (vigocli) and web UI are licensed under the
+GNU Affero General Public License, version 3 (see LICENSE).
+
+The Vigo agent (vigo), Connwaer, the protocol definitions and the
+documentation are licensed under the Apache License, Version 2.0 (see
+agent/LICENSE; installed beside the agent binary as LICENSE).
 
 It also bundles third-party software under its own licenses; see
 THIRD-PARTY-NOTICES.go.txt and THIRD-PARTY-NOTICES.rust.txt.
 
 "Vigo", "Connwaer" and the Vigo logo are trademarks of Alexander4, LLC.
-The Apache License does not grant permission to use them; see TRADEMARKS.md.
+Neither license grants permission to use them; see TRADEMARKS.md.

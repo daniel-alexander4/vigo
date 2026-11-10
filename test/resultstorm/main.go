@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // vigo-resultstorm measures the server's run-result *ingestion* path
 // under sustained write load — the half of the agent lifecycle the

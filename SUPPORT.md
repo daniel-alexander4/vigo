@@ -1,7 +1,8 @@
 # Support
 
-Vigo is free software under the [Apache License 2.0](LICENSE). Anyone can run
-it, at any size, with no license fee. Alexander4, LLC also sells support
+Vigo is free software, with the server under the
+[GNU Affero General Public License v3.0](LICENSE) and the agent under the
+[Apache License 2.0](agent/LICENSE). Anyone can run it, at any size, with no license fee. Alexander4, LLC also sells support
 subscriptions to organizations that need a vendor of record, defined response
 times and help running Vigo in production. One subscription covers both Vigo
 and Connwaer.
@@ -78,7 +79,7 @@ year is based on that count.
 
 ### If we stop providing support
 
-The code is Apache-2.0, so you keep every release you have and can run,
+The code is free software, so you keep every release you have and can run,
 change and maintain it yourself. If Alexander4 stops providing support during
 your term, we refund the unused part of your annual fee.
 

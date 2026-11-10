@@ -140,7 +140,7 @@ FROM alpine:3.21
 # Links the published image (ghcr.io/daniel-alexander4/vigo) to its source repo.
 LABEL org.opencontainers.image.source="https://github.com/daniel-alexander4/vigo" \
       org.opencontainers.image.description="Vigo server: vigosrv, vigocli and the Linux agent" \
-      org.opencontainers.image.licenses="Apache-2.0"
+      org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
 
 RUN apk add --no-cache ca-certificates libarchive-tools \
     weasyprint ttf-liberation font-dejavu
@@ -172,8 +172,10 @@ RUN --mount=type=bind,source=.,target=/ctx \
     if [ -d /ctx/dist/agent ]; then cp -a /ctx/dist/agent/. /dist/agent/; fi
 COPY --from=go-builder /build/dist/agent/linux/amd64/ /dist/agent/linux/amd64/
 
-# Apache-2.0 LICENSE and NOTICE — seeded into /srv/vigo/ and served to agents.
+# Server LICENSE (AGPL-3.0), agent LICENSE (Apache-2.0, served to agents) and
+# NOTICE — seeded into /srv/vigo/.
 COPY LICENSE /seed/LICENSE
+COPY agent/LICENSE /seed/LICENSE-agent
 COPY NOTICE /seed/NOTICE
 
 # Seed configs — copied to /srv/vigo on first run by entrypoint.

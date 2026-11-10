@@ -1326,7 +1326,7 @@
   "support.filing_li_logs": "Extractos de registro relevantes",
   "support.filing_li_tried": "Qué intentó, qué esperaba y qué sucedió",
   "support.filing_li_version": "Versión del servidor Vigo (visible en la barra lateral)",
-  "support.help_body": "Vigo es código abierto bajo la Licencia Apache 2.0 y se ofrece tal cual. Las preguntas y los informes de errores se responden por correo electrónico en la medida de lo posible:",
+  "support.help_body": "Vigo es software libre (el servidor bajo la GNU AGPL v3, el agente bajo la Licencia Apache 2.0) y se ofrece tal cual. Las preguntas y los informes de errores se responden por correo electrónico en la medida de lo posible:",
   "support.help_heading": "Obtener ayuda",
   "support.or": "o",
   "support.paid_body": "Las suscripciones Standard y Premium añaden tiempos de respuesta, un contrato por escrito y, con Premium, un ingeniero asignado. Precios y condiciones:",

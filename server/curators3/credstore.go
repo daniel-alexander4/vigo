@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package curators3 implements the read-only S3-compatible API over curator
 // artifacts (ADR-027). This file is the SigV4 credential store; the SigV4

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 package main
 
@@ -1616,9 +1616,10 @@ func NewServer(ctx context.Context, configFile string) (*Server, error) {
 			s.scrierHandler.RegisterRoutes(gwMux)
 			uiHandler.SetScrierEnabled(true)
 		}
-		// Serve the Apache-2.0 LICENSE and NOTICE so the bootstrap script can
-		// ship them alongside the agent binary it installs (Apache §4).
-		gwMux.HandleFunc("GET /license/LICENSE", serveLicenseFile(s.serverRoot, "LICENSE"))
+		// Serve the agent's Apache-2.0 LICENSE and the NOTICE so the bootstrap
+		// script can ship them alongside the agent binary it installs (Apache
+		// §4). The server's own AGPL text is LICENSE; the agent's is LICENSE-agent.
+		gwMux.HandleFunc("GET /license/LICENSE", serveLicenseFile(s.serverRoot, "LICENSE-agent"))
 		gwMux.HandleFunc("GET /license/NOTICE", serveLicenseFile(s.serverRoot, "NOTICE"))
 		if !s.swarmEnabled && s.cfg.Swarm.Curator.S3Port != 0 {
 			slog.Warn("curator S3 API configured but disabled — this server does not run the curator substrate (swarm.enabled does not match this host)",

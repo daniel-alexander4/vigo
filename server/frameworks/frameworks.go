@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package frameworks is the single source of truth for the set of
 // compliance frameworks Vigo reports on. Before 0.76.x the 22-framework

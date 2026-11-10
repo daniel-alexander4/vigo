@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package modlint validates, repairs, normalizes, and auto-comments Vigo
 // module definitions (.vgo files). Depends only on server/validate for the

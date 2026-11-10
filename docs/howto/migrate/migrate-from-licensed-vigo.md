@@ -1,6 +1,6 @@
 # Migrate from a licensed Vigo release
 
-Vigo 0.76.95 and later are Apache-2.0 open source with no node limit. Releases before that needed a signed `.lic` file and enforced a node count. This checklist takes a server from a licensed release to the current open-source one. Your database, secrets, TLS material, enrolled envoys and stacks carry over.
+Vigo 0.76.95 and later are open source with no node limit. Releases before that needed a signed `.lic` file and enforced a node count. This checklist takes a server from a licensed release to the current open-source one. Your database, secrets, TLS material, enrolled envoys and stacks carry over.
 
 The current server refuses to start if `server.yaml` still contains a key it does not know, including the old `license:` block. Work through the server.yaml step before you restart.
 

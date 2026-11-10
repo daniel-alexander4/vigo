@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package ai provides an LLM-powered assistant for natural language queries
 // about Vigo fleet state, configuration, and diagnostics. It wraps multiple

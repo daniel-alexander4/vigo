@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package scrier implements the Vigo Scrier remote access feature.
 // SSH sessions use xterm.js with a Go SSH client (no guacd).
