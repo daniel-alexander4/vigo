@@ -41,7 +41,7 @@ Pull the published image, or build it from source. Do one or the other.
 
 - [ ] Run `sudo vigocli doctor`. It lists any envoy with no enrolled client-certificate pin. The current server refuses those envoys at check-in.
 - [ ] On each listed envoy, re-run the bootstrap: `curl -sSfk https://<server>:8443/bootstrap | sudo sh`. Re-enrolling records the pin.
-- [ ] Envoys enrolled under a licensed release also hold a `COMMERCIAL-TERMS.md` and a stale `LICENSE` file in their data directory (`/etc/vigo-envoy/` on Linux, `C:\ProgramData\Vigo\` on Windows). A re-bootstrap replaces them with the Apache-2.0 `LICENSE` and `NOTICE`. On envoys you don't re-enroll, you can delete `COMMERCIAL-TERMS.md` by hand.
+- [ ] Envoys enrolled under a licensed release also hold a `COMMERCIAL-TERMS.md` and a stale `LICENSE` file in their data directory (`/etc/vigo-envoy/` on Linux, `C:\ProgramData\Vigo\` on Windows). A re-bootstrap replaces them with the agent's current `LICENSE` and `NOTICE`. On envoys you don't re-enroll, you can delete `COMMERCIAL-TERMS.md` by hand.
 
 ## Check the result
 

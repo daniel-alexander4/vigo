@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:9f0940fbecd4ab918a6ed3becc5bd4dda8a891907497e5d51805751c77a3de02 -->
+<!-- vigo-i18n source_sha:df35877453a6e4287878643726610d1ebf1d89e3b1a0f06b7f6d770e42fbe724 -->
 
 # Migrer depuis une version sous licence de Vigo
 
@@ -43,7 +43,7 @@ Récupérez l'image publiée ou compilez-la depuis les sources, l'un ou l'autre.
 
 - [ ] Lancez `sudo vigocli doctor`. Il liste les envoys sans empreinte de certificat client enregistrée. Le serveur actuel les refuse au check-in.
 - [ ] Sur chaque envoy listé, relancez le bootstrap : `curl -sSfk https://<serveur>:8443/bootstrap | sudo sh`. Le réenrôlement enregistre l'empreinte.
-- [ ] Les envoys enrôlés sous une version sous licence conservent aussi un `COMMERCIAL-TERMS.md` et un `LICENSE` obsolète dans leur répertoire de données (`/etc/vigo-envoy/` sous Linux, `C:\ProgramData\Vigo\` sous Windows). Un nouveau bootstrap les remplace par les fichiers `LICENSE` et `NOTICE` d'Apache-2.0. Sur les envoys que vous ne réenrôlez pas, vous pouvez supprimer `COMMERCIAL-TERMS.md` à la main.
+- [ ] Les envoys enrôlés sous une version sous licence conservent aussi un `COMMERCIAL-TERMS.md` et un `LICENSE` obsolète dans leur répertoire de données (`/etc/vigo-envoy/` sous Linux, `C:\ProgramData\Vigo\` sous Windows). Un nouveau bootstrap les remplace par les fichiers `LICENSE` et `NOTICE` actuels de l'agent. Sur les envoys que vous ne réenrôlez pas, vous pouvez supprimer `COMMERCIAL-TERMS.md` à la main.
 
 ## Vérifier le résultat
 
