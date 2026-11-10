@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0179813d5414691aa78c89e09271f282ea36032bf186a86f0a7305502af26b61 -->
+<!-- vigo-i18n source_sha:afcf14ea089a2806e5932102fba3756040b7753cc5070ddbed7e22794d6ef7df -->
 
 # 1 · Mettre le serveur en service
 
@@ -17,7 +17,7 @@ C'est le premier des quatre tutoriels — suivez-les dans l'ordre ; chacun s'app
 
 Vous pouvez récupérer l'image publiée du serveur ou la compiler vous-même. Dans les deux cas, l'image porte le tag `vigo:latest`, le nom qu'exécute le fichier compose généré.
 
-**Récupérer l'image publiée.** C'est la voie rapide. L'hôte a besoin de Docker avec le plugin Compose et d'un processeur x86_64 ; sous Ubuntu, `sudo apt-get install -y docker.io docker-compose-v2` les installe. L'image est signée avec la clé de publication du projet : les envoys mettent donc à jour leur agent d'eux-mêmes lorsque vous passez à une image plus récente. Elle contient l'agent Linux pour amd64 et arm64. Pour figer une version, utilisez son tag de version, par exemple `:0.80.0`, à la place de `:latest`.
+**Récupérer l'image publiée.** C'est la voie rapide. L'hôte a besoin de Docker avec le plugin Compose et d'un processeur x86_64 ; sous Ubuntu, `sudo apt-get install -y docker.io docker-compose-v2` les installe. L'image est signée avec la clé de publication du projet : les envoys mettent donc à jour leur agent d'eux-mêmes lorsque vous passez à une image plus récente. Elle contient l'agent Linux pour amd64 et arm64. Pour figer une version, utilisez son tag de version, par exemple `:0.80.1`, à la place de `:latest`.
 
 ```bash
 sudo docker pull ghcr.io/daniel-alexander4/vigo:latest
