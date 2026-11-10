@@ -112,6 +112,10 @@ The agent's enrolled hostname is whatever `hostname` returns on the host. `serve
 
 If you skip this step, swarm features that route through the server envoy will silently no-op for the server's own hostname. `vigocli swarm filecast distribute` still works (writes directly to the bind-mounted seed dir), but most other swarm operations don't involve the server in the peer set.
 
+### Who can enroll
+
+The seeded `server.yaml` lets any machine enroll without a token when it connects from loopback or a private address range (`bootstrap.trusted_enrollment`, pattern `*`). That suits a lab network. On a network you don't fully control, a machine there could enroll under any hostname and replace an existing envoy of the same name, so narrow the patterns and ranges, or remove the block and enroll with one-time tokens. [Enroll an envoy](enroll-an-envoy.md#token-free-trusted-enrollment) has the rules and examples. `server.yaml` changes take effect on restart (`sudo docker compose restart vigo`).
+
 ### Optional services
 
 Edit `COMPOSE_PROFILES` in `/srv/vigo/.env` to enable optional containers:

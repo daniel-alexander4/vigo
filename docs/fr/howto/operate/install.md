@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:37760d3dddf258e842d82bbeae385661d830392454d8ff037b529931a941d69e -->
+<!-- vigo-i18n source_sha:990344d305887b9958eddda3937e695ff15fc757cd15e38ac0fd43ed2559e219 -->
 
 # Installer le serveur Vigo
 
@@ -112,6 +112,10 @@ sudo vigocli envoys list             # the server should appear under its host's
 Le nom d'hôte enrôlé de l'agent est ce que renvoie `hostname` sur l'hôte. `server.hostname` dans `server.yaml` doit lui correspondre (étape 1) : le serveur s'en sert pour trouver son propre envoy lors de la création d'admin et pour son affichage de conformité.
 
 Si vous sautez cette étape, les fonctionnalités Swarm qui transitent par l'envoy du serveur ne feront silencieusement rien pour le nom d'hôte propre du serveur. `vigocli swarm filecast distribute` fonctionne encore (écrit directement dans le répertoire d'amorçage monté en bind), mais la plupart des autres opérations Swarm n'impliquent pas le serveur dans l'ensemble des pairs.
+
+### Qui peut s'enrôler
+
+Le `server.yaml` fourni par défaut permet à toute machine de s'enrôler sans token lorsqu'elle se connecte depuis le bouclage ou une plage d'adresses privée (`bootstrap.trusted_enrollment`, motif `*`). Cela convient à un réseau de laboratoire. Sur un réseau que vous ne maîtrisez pas entièrement, une machine qui s'y trouve pourrait s'enrôler sous n'importe quel nom d'hôte et remplacer un envoy existant du même nom ; restreignez donc les motifs et les plages, ou supprimez le bloc et enrôlez avec des tokens à usage unique. [Enrôler un envoy](enroll-an-envoy.md#sans-token-enrôlement-de-confiance) détaille les règles et donne des exemples. Les modifications de `server.yaml` prennent effet au redémarrage (`sudo docker compose restart vigo`).
 
 ### Services optionnels
 

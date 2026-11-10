@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:a7757244a3abcf80e5912ee095d033f555ae4f00a6a3495691ae36c30704ab9a -->
+<!-- vigo-i18n source_sha:7f8ad0951f9fc631f1ecc03c65568828a3efdce5c69cf702019287e5f5358a93 -->
 
 # Démarrage rapide
 
@@ -65,9 +65,31 @@ Puis toute *autre* machine que vous souhaitez gérer — notez qu'il s'agit d'un
 curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
-Le `-k` est intentionnel. Le serveur Vigo exécute sa propre autorité de certification et présente un certificat auto-signé. La confiance s'établit à l'étape *suivante* : le script de bootstrap télécharge l'agent, génère une paire de clés ED25519 propre à l'hôte et l'enregistre auprès du serveur (sans jeton depuis le loopback et les CIDR de LAN privés par défaut ; exigez un jeton à usage unique pour tout ce qui se trouve en dehors des plages d'enrôlement de confiance — frappez-en un avec `vigocli tokens generate`, liez-le avec `vigocli approved add '*.example.com' --token <token>`, puis récupérez `/bootstrap?token=<token>`). Chaque appel gRPC ultérieur entre l'agent et le serveur est épinglé en mTLS contre cette paire — `-k` ne relâche que la récupération de bootstrap à usage unique, pas la sécurité en régime établi.
+Le `-k` est intentionnel. Le serveur Vigo exécute sa propre autorité de certification et présente un certificat auto-signé. La confiance s'établit à l'étape *suivante* : le script de bootstrap télécharge l'agent, génère une paire de clés ED25519 propre à l'hôte et l'enregistre auprès du serveur. Chaque appel gRPC ultérieur entre l'agent et le serveur est épinglé en mTLS contre cette paire — `-k` ne relâche que la récupération de bootstrap à usage unique, pas la sécurité en régime établi.
 
 Le script de bootstrap installe également le service propre à l'OS (systemd / launchd / rc.d / rcctl / SMF / Windows Service).
+
+### Enrôler sans jeton
+
+Le `server.yaml` fourni par défaut permet à une machine de s'enrôler sans jeton lorsqu'elle se connecte depuis le loopback ou une plage d'adresses privée :
+
+```yaml
+bootstrap:
+  trusted_enrollment:
+    - pattern: "*"           # n'importe quel nom d'hôte
+      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8",
+              "fc00::/7", "fe80::/10", "::1/128"]
+```
+
+C'est pratique sur un réseau de laboratoire, mais cela fait confiance à toute machine qui peut joindre le port 8443 depuis ces plages. Une telle machine peut s'enrôler sous n'importe quel nom d'hôte, et le script de bootstrap remplace un Envoy existant qui porte le même nom. Avant de gérer quoi que ce soit d'important, restreignez les motifs et les plages (voir [Enrôlement sans jeton](howto/operate/enroll-an-envoy.md#sans-token-enrôlement-de-confiance)) ou supprimez `trusted_enrollment` et enrôlez avec des jetons à usage unique :
+
+```bash
+sudo vigocli tokens generate                                  # sur le serveur ; affiche le jeton
+sudo vigocli approved add 'web*.example.com' --token <token>   # les noms d'hôte qu'il peut enrôler
+curl -sSfk "https://<server-ip>:8443/bootstrap?token=<token>" | sudo sh   # sur l'Envoy
+```
+
+Les modifications de `server.yaml` prennent effet au redémarrage du serveur (`cd /srv/vigo && sudo docker compose restart vigo`).
 
 Après l'enrôlement, chaque Envoy apparaît dans le tableau de bord à `https://localhost:8443/envoys` et fait un check-in à l'intervalle défini par `checkin.interval` dans `server.yaml`.
 
