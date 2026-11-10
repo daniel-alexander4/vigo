@@ -257,13 +257,13 @@ Purged 2 stale envoy(s).
 
 ## push
 
-Force a envoy to check in and converge immediately, without waiting for its next polling interval. Sets a force-update flag on the server that the agent picks up on its next poll.
+Flag an envoy to download the latest agent binary and restart at its next check-in. It sets the same force-update flag as `envoys rebootstrap`. It does not make the envoy check in sooner; published config reaches each envoy at its next scheduled check-in (`checkin.interval` in `server.yaml`).
 
 ```bash
-# Push a single envoy
+# Flag a single envoy
 vigocli envoys push <hostname-or-uuid>
 
-# Push all active envoys
+# Flag all active envoys (asks to confirm; --yes skips the prompt)
 vigocli envoys push --all
 ```
 
@@ -271,7 +271,7 @@ vigocli envoys push --all
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Force check-in for all active envoys |
+| `--all` | Flag all active envoys |
 
 ### Example
 

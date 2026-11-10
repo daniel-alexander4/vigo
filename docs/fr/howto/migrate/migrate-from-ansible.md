@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:3440d686d3d20c83200ec17aead829f27ad126e43a0197f998f97edb8b1dd857 -->
+<!-- vigo-i18n source_sha:a282ff8c91221c9bb0dfeeaa774eeb9f8a2a725e418f37592e5fb19b958b0d73 -->
 
 # Migration depuis Ansible
 
@@ -314,7 +314,7 @@ Les secrets sont résolus côté serveur lors de la compilation du bundle. La va
 ## Pièges courants
 
 
-1. **Pas de mode push.** Ansible pousse à la demande. Les agents Vigo tirent à intervalle régulier. Pour une convergence immédiate, utilisez `vigocli envoys push` pour relancer des Envoys spécifiques, ou `vigocli task run` pour des commandes ad-hoc.
+1. **Pas de mode push.** Ansible pousse à la demande. Les agents Vigo tirent à intervalle régulier. La configuration que vous publiez atteint chaque Envoy à son prochain check-in ; pour ce qui doit se produire immédiatement, utilisez `vigocli task run` pour des commandes ad-hoc.
 
 2. **Pas de `register:` / chaînage de variables.** Ansible peut capturer la sortie d'une tâche et la réutiliser dans des tâches ultérieures. Les ressources Vigo sont déclaratives et ne produisent pas de variables. Si vous avez besoin de valeurs dynamiques, utilisez les traits (pour les faits système) ou l'héritage `common.vgo` au niveau du répertoire (pour les données partagées).
 

@@ -313,7 +313,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 ## Common Gotchas
 
 
-1. **No push mode.** Ansible pushes on demand. Vigo agents pull on an interval. For immediate convergence, use `vigocli envoys push` to bump specific envoys, or use `vigocli task run` for ad-hoc commands.
+1. **No push mode.** Ansible pushes on demand. Vigo agents pull on an interval. Config you publish reaches each envoy at its next check-in; for something that has to happen now, use `vigocli task run` for ad-hoc commands.
 
 2. **No `register:` / variable chaining.** Ansible can capture task output and use it in later tasks. Vigo resources are declarative and don't produce variables. If you need dynamic values, use traits (for system facts) or directory-level `common.vgo` inheritance (for shared data).
 

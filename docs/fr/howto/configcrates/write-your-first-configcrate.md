@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:d299388880fb26d0e0a6672b2fc271fc399f9e8273b55600eaa3f7ed8acef101 -->
+<!-- vigo-i18n source_sha:0425ad11312bfa04c7502f3b7477011c417365514cc6ccdd1b62ff5e2bd68a23 -->
 
 # Écrire votre premier configcrate
 
@@ -206,11 +206,7 @@ resources:
 
 Ces commentaires `#~` sont régénérés à chaque publication — ne les modifiez pas. Utilisez de simples commentaires `#` pour vos propres notes.
 
-Forcez ensuite un check-in immédiat :
-
-```bash
-vigocli envoys push web1.example.com
-```
+L'Envoy prend la modification en compte à son prochain check-in, dans l'intervalle `checkin.interval` défini dans `server.yaml` (cinq minutes dans la configuration initiale).
 
 Vérifiez le résultat de l'exécution :
 

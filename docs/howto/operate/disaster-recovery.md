@@ -173,9 +173,9 @@ vigocli nodes
 # Check compliance status
 vigocli nodes | grep -c compliant
 
-# Verify a specific envoy can check in
-# (wait for its next check-in cycle, or force it)
-vigocli envoys push web-01.example.com
+# Verify envoys are checking in again
+# (each one reports at its next check-in cycle; watch LAST SEEN)
+vigocli envoys list
 
 # Check the dashboard
 open https://<server-ip>:8443/
