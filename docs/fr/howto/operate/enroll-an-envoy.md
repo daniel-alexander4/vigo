@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:fd369a89f7e590f74b7886036d692133fe6d7fbc402d5cc097b361fe1a9fce25 -->
+<!-- vigo-i18n source_sha:4f6f001c7b7808153218f6ebf80f7029df4f960ff1450fe75527dc351221bfe1 -->
 
 # Enrôler un Envoy
 
@@ -79,19 +79,37 @@ Le script PowerShell effectue les mêmes étapes mais installe un service Window
 
 ### Sans token (enrôlement de confiance)
 
-Configurez des motifs de confiance dans `server.yaml` :
+`bootstrap.trusted_enrollment` dans `server.yaml` liste les machines autorisées à s'enrôler sans token. Chaque entrée comporte un `pattern` et une liste de `cidrs` :
+
+- `pattern` est un glob comparé au nom d'hôte que remonte l'agent (il accepte aussi l'adresse IP remontée par l'agent).
+- `cidrs` est comparé à l'adresse source de la connexion d'enrôlement, telle que le serveur la voit. Derrière un NAT ou un VPN, c'est l'adresse traduite. Un Envoy qui se connecte en IPv6 est comparé sur son adresse IPv6 ; listez donc aussi des plages IPv6 si vos machines en utilisent.
+- Les entrées sont examinées dans l'ordre, et la première qui correspond aux deux critères enrôle la machine.
+- Une entrée sans `cidrs` accepte n'importe quelle adresse source. Évitez-le hors d'un réseau de test fermé.
+- Une requête qui porte un token utilise toujours le token à la place. Sans token et sans entrée, l'enrôlement est refusé.
+- Un nom d'hôte qui fait partie des propres noms TLS du serveur ne s'enrôle que depuis le loopback.
+
+Le `server.yaml` fourni par défaut fait confiance à tout nom d'hôte depuis le loopback et les plages privées :
+
+```yaml
+bootstrap:
+  trusted_enrollment:
+    - pattern: "*"           # n'importe quel nom d'hôte
+      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8",
+              "fc00::/7", "fe80::/10", "::1/128"]
+```
+
+Quiconque peut joindre le port 8443 depuis une plage de confiance peut enrôler une machine sous n'importe quel nom d'hôte autorisé par le motif. Le script de bootstrap s'exécute avec `--force` : il remplace donc un Envoy existant qui porte le même nom d'hôte, et la nouvelle machine reçoit alors la configuration de cet Envoy. En production, liez chaque motif au réseau sur lequel les machines se trouvent réellement, par exemple :
 
 ```yaml
 bootstrap:
   trusted_enrollment:
     - pattern: "*.web.example.com"
-      cidrs: ["10.0.0.0/8"]
-    - pattern: "*.dev.*"
-      cidrs: ["192.168.0.0/16"]
+      cidrs: ["10.20.0.0/16"]
+    - pattern: "*.dev.example.com"
+      cidrs: ["192.168.50.0/24"]
 ```
 
-
-Les Envoys correspondant à la fois au glob de nom d'hôte et au CIDR source s'enrôlent sans token.
+Ou supprimez entièrement `trusted_enrollment` et enrôlez chaque machine avec un token à usage unique (ci-dessous). Les modifications de `server.yaml` prennent effet au redémarrage du serveur : `cd /srv/vigo && sudo docker compose restart vigo`.
 
 ### Token à usage unique
 

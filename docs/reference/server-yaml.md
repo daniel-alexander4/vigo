@@ -134,14 +134,16 @@ Agent enrollment configuration. Requires `server.tls.ca_key_file`.
 bootstrap:
   cert_validity: "8760h"             # agent cert lifetime (default: 1 year)
   trusted_enrollment:                # token-free enrollment by pattern + source IP
-    - pattern: "*"
-      cidrs: ["192.168.0.0/16", "10.0.0.0/8"]
+    - pattern: "*.web.example.com"   # hostname glob (or the agent's reported IP)
+      cidrs: ["10.20.0.0/16"]        # source address of the enrollment connection
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `cert_validity` | `8760h` | Lifetime of agent TLS certificates |
-| `trusted_enrollment` | (empty) | Patterns + CIDRs for token-free enrollment |
+| `trusted_enrollment` | empty: every enrollment needs a token | Entries of `pattern` + `cidrs` that may enroll without a token. Checked in order; the first entry whose pattern matches the hostname and whose `cidrs` contain the connection's source address enrolls the machine. An entry with no `cidrs` accepts any source address. |
+
+The `server.yaml` that `--seed-only` writes ships with one entry, `pattern: "*"` with loopback and the private IPv4 and IPv6 ranges, so any machine on a private network can enroll without a token, under any hostname, replacing an existing envoy of the same name. Narrow it before production. See [Token-free enrollment](../howto/operate/enroll-an-envoy.md#token-free-trusted-enrollment) for the full rules. Changes take effect on restart.
 
 ## auth
 

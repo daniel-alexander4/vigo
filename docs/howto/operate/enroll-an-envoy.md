@@ -78,19 +78,37 @@ The PowerShell script performs the same steps but installs a Windows Service via
 
 ### Token-Free (Trusted Enrollment)
 
-Configure trusted patterns in `server.yaml`:
+`bootstrap.trusted_enrollment` in `server.yaml` lists which machines may enroll without a token. Each entry has a `pattern` and a list of `cidrs`:
+
+- `pattern` is a glob matched against the hostname the agent reports (it also accepts the agent's reported IP address).
+- `cidrs` are matched against the source address of the enrollment connection, as the server sees it. Behind NAT or a VPN that is the translated address. An envoy that connects over IPv6 is matched on its IPv6 address, so list IPv6 ranges too if your machines use them.
+- Entries are checked in order, and the first one that matches both enrolls the machine.
+- An entry without `cidrs` accepts any source address. Avoid that outside a closed test network.
+- A request that carries a token always uses the token instead. With no token and no entries, enrollment is refused.
+- A hostname that is one of the server's own TLS names enrolls only from loopback.
+
+The seeded `server.yaml` trusts every hostname from loopback and the private ranges:
+
+```yaml
+bootstrap:
+  trusted_enrollment:
+    - pattern: "*"           # any hostname
+      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8",
+              "fc00::/7", "fe80::/10", "::1/128"]
+```
+
+Anyone who can reach port 8443 from a trusted range can enroll a machine under any hostname the pattern allows. The bootstrap script runs with `--force`, so it replaces an existing envoy that has the same hostname, and the new machine then receives that envoy's config. For production, tie each pattern to the network the machines really live on, for example:
 
 ```yaml
 bootstrap:
   trusted_enrollment:
     - pattern: "*.web.example.com"
-      cidrs: ["10.0.0.0/8"]
-    - pattern: "*.dev.*"
-      cidrs: ["192.168.0.0/16"]
+      cidrs: ["10.20.0.0/16"]
+    - pattern: "*.dev.example.com"
+      cidrs: ["192.168.50.0/24"]
 ```
 
-
-Envoys matching both the hostname glob and source CIDR enroll without a token.
+Or remove `trusted_enrollment` entirely and enroll every machine with a one-time token (below). `server.yaml` changes take effect when the server restarts: `cd /srv/vigo && sudo docker compose restart vigo`.
 
 ### One-Time Token
 

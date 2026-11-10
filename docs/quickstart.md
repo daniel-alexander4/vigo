@@ -63,9 +63,31 @@ Then any *other* machine you want to manage — note this is a separate command 
 curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
-The `-k` is intentional. The Vigo server runs its own CA and presents a self-signed cert. Trust gets established on the *next* step: the bootstrap script downloads the agent, generates a per-host ED25519 keypair, and registers it with the server (token-free from loopback and private-LAN CIDRs by default; require a one-time token for anything outside the trusted-enrollment ranges — mint one with `vigocli tokens generate`, bind it with `vigocli approved add '*.example.com' --token <token>`, and fetch `/bootstrap?token=<token>`). Every subsequent gRPC call between the agent and the server is mTLS-pinned against that pair — `-k` only relaxes the one-time bootstrap fetch, not the steady-state security.
+The `-k` is intentional. The Vigo server runs its own CA and presents a self-signed cert. Trust gets established on the *next* step: the bootstrap script downloads the agent, generates a per-host ED25519 keypair, and registers it with the server. Every subsequent gRPC call between the agent and the server is mTLS-pinned against that pair — `-k` only relaxes the one-time bootstrap fetch, not the steady-state security.
 
 The bootstrap script also installs the per-OS service (systemd / launchd / rc.d / rcctl / SMF / Windows Service).
+
+### Enrolling without a token
+
+The seeded `server.yaml` lets a machine enroll without a token when it connects from loopback or a private address range:
+
+```yaml
+bootstrap:
+  trusted_enrollment:
+    - pattern: "*"           # any hostname
+      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8",
+              "fc00::/7", "fe80::/10", "::1/128"]
+```
+
+That is convenient on a lab network, but it trusts every machine that can reach port 8443 from those ranges. Such a machine can enroll under any hostname, and the bootstrap script replaces an existing envoy that has the same name. Before you manage anything that matters, narrow the patterns and ranges (see [Token-free enrollment](howto/operate/enroll-an-envoy.md#token-free-trusted-enrollment)) or remove `trusted_enrollment` and enroll with one-time tokens:
+
+```bash
+sudo vigocli tokens generate                                  # on the server; prints the token
+sudo vigocli approved add 'web*.example.com' --token <token>   # which hostnames it may enroll
+curl -sSfk "https://<server-ip>:8443/bootstrap?token=<token>" | sudo sh   # on the envoy
+```
+
+Changes to `server.yaml` take effect when the server restarts (`cd /srv/vigo && sudo docker compose restart vigo`).
 
 After enrollment each envoy appears in the dashboard at `https://localhost:8443/envoys` and checks in at the interval set by `checkin.interval` in `server.yaml`.
 
