@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 package bootstrap
 
@@ -496,7 +496,7 @@ else
     echo "WARNING: server did not return a checksum, skipping verification"
 fi
 
-# Ship the Apache-2.0 LICENSE and NOTICE alongside the agent binary.
+# Ship the agent's Apache-2.0 LICENSE and the NOTICE alongside the agent binary.
 echo "Downloading license notices..."
 curl -sSf $CURL_TLS "${SERVER_ADDR}/license/LICENSE" -o "${DATA_DIR}/LICENSE" 2>/dev/null || true
 curl -sSf $CURL_TLS "${SERVER_ADDR}/license/NOTICE" -o "${DATA_DIR}/NOTICE" 2>/dev/null || true

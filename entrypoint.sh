@@ -49,10 +49,12 @@ ENVEOF
 fi
 
 # ---------------------------------------------------------------------------
-# Copy the Apache-2.0 LICENSE and NOTICE (always overwrite — keep current)
+# Copy LICENSE (server, AGPL-3.0), LICENSE-agent (agent, Apache-2.0, served to
+# envoys at /license/LICENSE) and NOTICE (always overwrite — keep current)
 # ---------------------------------------------------------------------------
 
 cp "${SEED_DIR}/LICENSE" "${DATA_DIR}/LICENSE"
+cp "${SEED_DIR}/LICENSE-agent" "${DATA_DIR}/LICENSE-agent"
 cp "${SEED_DIR}/NOTICE" "${DATA_DIR}/NOTICE"
 
 # ---------------------------------------------------------------------------

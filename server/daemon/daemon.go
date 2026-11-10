@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package daemon is the single source of truth for recovered-panic handling
 // across the server. An unrecovered panic in any goroutine crashes the whole

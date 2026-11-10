@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package audit provides automated regression tests that catch documentation
 // drift, missing docs, undocumented endpoints, ignored errors, secrets in logs,

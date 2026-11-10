@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // vigo-loadtest simulates N envoys checking in at a configurable interval.
 // Measures server throughput, latency distribution, and error rate.

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package secretref is the single source of truth for the `secret:<key>`
 // reference grammar: how a reference is found inside a value (Scan) and

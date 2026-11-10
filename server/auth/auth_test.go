@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 package auth
 
@@ -38,7 +38,7 @@ func TestIsPublicPath(t *testing.T) {
 		{"/api/v1/swarm/poolq/block/abc", false},
 		{"/api/v1/swarm/poolq/unblock/abc", false},
 		{"/api/v1/swarm/curator/blob/abc", true},
-		// Fetched by the bootstrap script with no session (Apache-2.0 section 4).
+		// Fetched by the bootstrap script with no session (agent license, Apache-2.0 section 4).
 		{"/healthz", true},
 		{"/license/LICENSE", true},
 		{"/license/NOTICE", true},

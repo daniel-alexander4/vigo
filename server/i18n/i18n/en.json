@@ -1326,7 +1326,7 @@
   "support.filing_li_logs": "Relevant log excerpts",
   "support.filing_li_tried": "What you tried, what you expected, what happened",
   "support.filing_li_version": "Vigo server version (visible in the sidebar)",
-  "support.help_body": "Vigo is open source under the Apache License 2.0 and is provided as is. Questions and bug reports are answered on a best-effort basis by email:",
+  "support.help_body": "Vigo is free software (the server under the GNU AGPL v3, the agent under the Apache License 2.0) and is provided as is. Questions and bug reports are answered on a best-effort basis by email:",
   "support.help_heading": "Getting help",
   "support.or": "or",
   "support.paid_body": "Standard and Premium subscriptions add response times, a written agreement and, with Premium, a named engineer. Prices and terms:",

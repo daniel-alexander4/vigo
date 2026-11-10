@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package cve owns the canonical CVE severity vocabulary. Both CLI and
 // UI surfaces classify input severity strings through this package and

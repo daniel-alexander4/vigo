@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerate THIRD-PARTY-NOTICES.{go,rust}.txt — the attribution files
 # that satisfy the MIT/BSD/Apache-2.0/ISC notice obligations of Vigo's
-# dependencies. Vigo itself ships under Apache-2.0; every
+# dependencies. Vigo itself ships under AGPL-3.0 (server) and Apache-2.0 (agent); every
 # bundled dependency is permissive (no copyleft reaches a distributed
 # binary). For OR-licensed crates we elect the permissive arm and omit
 # the copyleft text.

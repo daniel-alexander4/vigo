@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package tickets persists TLS 1.3 session-ticket encryption keys across
 // vigosrv restarts. Go's crypto/tls auto-generates ticket keys per

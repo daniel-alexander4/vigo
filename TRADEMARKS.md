@@ -1,8 +1,8 @@
 # Trademarks
 
-The code is Apache-2.0. The names are not. "Vigo", "Connwaer" and the Vigo
-logo are trademarks of Alexander4, LLC, and the Apache License grants no
-right to use them (section 6).
+The code is open source (AGPL-3.0 for the server, Apache-2.0 for the agent).
+The names are not. "Vigo", "Connwaer" and the Vigo logo are trademarks of
+Alexander4, LLC, and neither license grants any right to use them.
 
 **You may, without asking:**
 

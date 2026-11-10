@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // vigo stands up a realistic, multi-cloud envoy
 // fleet against a live vigosrv — believable AWS/GCP host hierarchy,

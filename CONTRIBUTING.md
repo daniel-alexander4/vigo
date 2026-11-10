@@ -1,8 +1,12 @@
 # Contributing
 
-Vigo is licensed under the [Apache License 2.0](LICENSE). Contributions are
-accepted under the same license — inbound equals outbound — with no
-contributor license agreement.
+The Vigo server, CLI and web UI are licensed under the
+[GNU Affero General Public License v3.0](LICENSE). The agent (`agent/`),
+Connwaer (`connwaer/`), the protocol definitions (`protobuf/`) and the
+documentation (`docs/`) are licensed under the
+[Apache License 2.0](agent/LICENSE); each of those directories carries its own
+`LICENSE` file. Contributions are accepted under the license of the part they
+change — inbound equals outbound — with no contributor license agreement.
 
 ## Sign off your commits
 

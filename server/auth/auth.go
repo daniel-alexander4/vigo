@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package auth provides pluggable authentication for the Vigo web UI and
 // REST API. Three methods are supported: "basic" (default, username/password
@@ -104,7 +104,7 @@ var publicPaths = map[string]bool{
 	"/healthz": true,
 	// Poolq topic list — see the `/api/v1/swarm/poolq/topic/` prefix above.
 	"/api/v1/swarm/poolq/topics": true,
-	// Apache-2.0 LICENSE and NOTICE. The bootstrap script fetches them with
+	// The agent's Apache-2.0 LICENSE and the NOTICE. The bootstrap script fetches them with
 	// no session to ship beside the agent binary (license section 4).
 	"/license/LICENSE": true,
 	"/license/NOTICE":  true,

@@ -1,8 +1,8 @@
-<!-- vigo-i18n source_sha:ebfb65bb82ea3b5deacf6d037dadd59d66c6027325fff1a09e01e73c32bc21f8 -->
+<!-- vigo-i18n source_sha:9f0940fbecd4ab918a6ed3becc5bd4dda8a891907497e5d51805751c77a3de02 -->
 
 # Migrer depuis une version sous licence de Vigo
 
-Vigo 0.76.95 et les versions suivantes sont open source sous Apache-2.0, sans limite de nœuds. Les versions antérieures exigeaient un fichier `.lic` signé et imposaient un nombre maximal de nœuds. Cette liste de contrôle fait passer un serveur d'une version sous licence à la version open source actuelle. Votre base de données, vos secrets, votre matériel TLS, vos envoys enrôlés et vos stacks sont conservés.
+Vigo 0.76.95 et les versions suivantes sont open source, sans limite de nœuds. Les versions antérieures exigeaient un fichier `.lic` signé et imposaient un nombre maximal de nœuds. Cette liste de contrôle fait passer un serveur d'une version sous licence à la version open source actuelle. Votre base de données, vos secrets, votre matériel TLS, vos envoys enrôlés et vos stacks sont conservés.
 
 Le serveur actuel refuse de démarrer si `server.yaml` contient encore une clé qu'il ne connaît pas, y compris l'ancien bloc `license:`. Traitez l'étape server.yaml avant de redémarrer.
 

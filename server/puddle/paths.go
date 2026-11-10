@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package puddle implements the service-account puddle identity for the
 // vigosrv runtime user (ADR-025). The on-disk envelope is parallel to the
