@@ -85,8 +85,9 @@ envoys:
 To deploy a new version across your fleet in batches:
 
 ```bash
-# Update the app_tag in envoys.vgo, then:
-vigocli envoys push --all
+# Update the app_tag in envoys.vgo, then publish; each envoy picks it
+# up at its next check-in:
+vigocli config publish
 ```
 
 Or use a task for more control:

@@ -205,11 +205,7 @@ resources:
 
 These `#~` comments are regenerated on every publish — don't edit them. Use plain `#` comments for your own notes.
 
-Then force an immediate check-in:
-
-```bash
-vigocli envoys push web1.example.com
-```
+The envoy picks it up at its next check-in, within the `checkin.interval` set in `server.yaml` (five minutes in the seeded config).
 
 Check the run result:
 

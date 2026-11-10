@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:11cb82200674aaf072471a3957a9d37b602ef44881794828d8f1873b229c3097 -->
+<!-- vigo-i18n source_sha:9975d0a6c95a5ab2e0b896f0bc6a682ef270621bc59a807df1e90f8a510e3bd6 -->
 
 # Gestion d'une stack Docker
 
@@ -86,8 +86,9 @@ envoys:
 Pour déployer une nouvelle version par lots sur l'ensemble de votre flotte :
 
 ```bash
-# Update the app_tag in envoys.vgo, then:
-vigocli envoys push --all
+# Update the app_tag in envoys.vgo, then publish; each envoy picks it
+# up at its next check-in:
+vigocli config publish
 ```
 
 Ou utilisez une tâche pour plus de contrôle :

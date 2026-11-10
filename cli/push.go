@@ -10,8 +10,13 @@ import (
 )
 
 var envoysPushCmd = &cobra.Command{
-	Use:               "push [hostname-or-uuid]",
-	Short:             "Force targeted envoys to check in and converge immediately instead of waiting for their next interval",
+	Use:   "push [hostname-or-uuid]",
+	Short: "Flag envoys to re-download the agent binary and restart at their next check-in",
+	Long: `Flag one envoy, or every active envoy with --all, to download the latest agent
+binary and restart at its next check-in. It does not make the envoy check in
+sooner: config you publish reaches each envoy at its next scheduled check-in
+(checkin.interval in server.yaml). This sets the same flag as
+"vigocli envoys rebootstrap".`,
 	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
@@ -22,7 +27,7 @@ var envoysPushCmd = &cobra.Command{
 		client := newAPIClient()
 
 		if all {
-			ok, err := confirmAction(cmd, "Force check-in for ALL envoys?")
+			ok, err := confirmAction(cmd, "Flag ALL envoys to re-download the agent and restart?")
 			if err != nil {
 				return err
 			}
@@ -58,5 +63,5 @@ var envoysPushCmd = &cobra.Command{
 }
 
 func init() {
-	envoysPushCmd.Flags().Bool("all", false, "Push to all envoys")
+	envoysPushCmd.Flags().Bool("all", false, "Flag all active envoys")
 }

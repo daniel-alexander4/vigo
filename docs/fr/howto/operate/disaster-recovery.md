@@ -1,4 +1,4 @@
-<!-- vigo-i18n source_sha:0de99b706735c88198066e538a3b4460d599db370f6fdeacd76de16734edd3f3 -->
+<!-- vigo-i18n source_sha:469887371cd0e6c0e2475c2c2c92a4cde1f51b45a32d89618f0fc66c6eb0ed0f -->
 
 # Reprise après sinistre
 
@@ -174,9 +174,9 @@ vigocli nodes
 # Check compliance status
 vigocli nodes | grep -c compliant
 
-# Verify a specific envoy can check in
-# (wait for its next check-in cycle, or force it)
-vigocli envoys push web-01.example.com
+# Verify envoys are checking in again
+# (each one reports at its next check-in cycle; watch LAST SEEN)
+vigocli envoys list
 
 # Check the dashboard
 open https://<server-ip>:8443/
