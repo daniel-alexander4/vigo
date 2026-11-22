@@ -143,7 +143,7 @@ LABEL org.opencontainers.image.source="https://github.com/daniel-alexander4/vigo
       org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
 
 RUN apk add --no-cache ca-certificates libarchive-tools \
-    weasyprint ttf-liberation font-dejavu
+    weasyprint ttf-liberation font-dejavu tini
 
 # Install litestream for SQLite WAL replication (optional backup feature).
 ARG LITESTREAM_VERSION=v0.3.13
@@ -191,4 +191,10 @@ COPY entrypoint.sh /entrypoint.sh
 
 EXPOSE 1530 8443
 
-ENTRYPOINT ["/entrypoint.sh"]
+# tini is PID 1 so orphaned processes get reaped. Without it vigosrv is PID 1
+# (entrypoint.sh execs it), and every process orphaned inside the container is
+# reparented to it and never collected — BusyBox wget's ssl_client helper from
+# the 15s healthcheck alone left ~5,800 zombies a day until the container's
+# pids.max was reached. vigosrv must not reap on its own: a wait(-1) loop would
+# steal exit statuses from os/exec's Wait. tini forwards SIGTERM to vigosrv.
+ENTRYPOINT ["/sbin/tini", "--", "/entrypoint.sh"]
